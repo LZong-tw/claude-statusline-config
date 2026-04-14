@@ -61,6 +61,12 @@
         "commandPath": "~/.claude/cache-input.sh"
       },
       {
+        "id": "5af08ee2-eea5-4f89-81b7-bbc8b78e0917",
+        "type": "custom-command",
+        "backgroundColor": "bgYellow",
+        "commandPath": "~/.claude/cache-savings.sh"
+      },
+      {
         "id": "72c2a2ae-1158-4d49-bdfe-67d9463b478d",
         "type": "version",
         "backgroundColor": "bgBrightCyan"
