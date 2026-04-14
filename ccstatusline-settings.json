@@ -1,0 +1,118 @@
+{
+  "version": 3,
+  "lines": [
+    [
+      {
+        "id": "e71e88c9-1b3e-40b1-9d08-630dbd36f6be",
+        "type": "tokens-input"
+      },
+      {
+        "id": "e30230aa-5d3f-430b-89a0-7de317156c39",
+        "type": "tokens-output"
+      },
+      {
+        "id": "8386d4b5-70cc-4b9f-a0c1-1c074633d899",
+        "type": "tokens-total"
+      },
+      {
+        "id": "41625b58-6739-4e15-8b42-f78f4a36160e",
+        "type": "thinking-effort",
+        "backgroundColor": "bgRed"
+      }
+    ],
+    [
+      {
+        "id": "c8c65d5e-a0b6-4506-b7bc-b7635216122e",
+        "type": "model",
+        "backgroundColor": "bgBrightBlue"
+      },
+      {
+        "id": "5",
+        "type": "git-branch",
+        "color": "magenta"
+      },
+      {
+        "id": "1e1e8ad2-c68d-4375-a1bd-e712ec1abb91",
+        "type": "git-worktree"
+      },
+      {
+        "id": "7",
+        "type": "git-changes",
+        "color": "yellow"
+      }
+    ],
+    [
+      {
+        "id": "6ec3cd02-6973-4319-be4b-2c6ba2f6865c",
+        "type": "custom-command",
+        "backgroundColor": "bgBrightBlack",
+        "commandPath": "~/.claude/cache-read.sh"
+      },
+      {
+        "id": "3b7c4d15-9a37-4e61-9020-6bacf11634de",
+        "type": "custom-command",
+        "backgroundColor": "bgBrightCyan",
+        "commandPath": "~/.claude/cache-creation.sh"
+      },
+      {
+        "id": "b005a132-e79a-4d38-b28c-f2b8eb75056f",
+        "type": "custom-command",
+        "backgroundColor": "bgBrightBlue",
+        "commandPath": "~/.claude/cache-input.sh"
+      },
+      {
+        "id": "72c2a2ae-1158-4d49-bdfe-67d9463b478d",
+        "type": "version",
+        "backgroundColor": "bgBrightCyan"
+      }
+    ],
+    [
+      {
+        "id": "fc809140-362c-475e-a44b-5c4f3fafc990",
+        "type": "session-cost"
+      },
+      {
+        "id": "c0c45e06-b5d9-44ed-aa00-5cd20b50fa82",
+        "type": "session-clock"
+      },
+      {
+        "id": "9fa1e993-e211-4ffa-901e-aa22a46e4a84",
+        "type": "context-bar",
+        "backgroundColor": "bgBlue",
+        "metadata": {
+          "display": "progress-short"
+        }
+      }
+    ]
+  ],
+  "flexMode": "full-until-compact",
+  "compactThreshold": 60,
+  "colorLevel": 2,
+  "defaultPadding": " ",
+  "inheritSeparatorColors": false,
+  "globalBold": false,
+  "minimalistMode": false,
+  "powerline": {
+    "enabled": true,
+    "separators": [
+      ""
+    ],
+    "separatorInvertBackground": [
+      false
+    ],
+    "startCaps": [
+      "",
+      "",
+      "",
+      ""
+    ],
+    "endCaps": [
+      "",
+      "",
+      ""
+    ],
+    "theme": "nord-aurora",
+    "autoAlign": false,
+    "continueThemeAcrossLines": false
+  }
+}
