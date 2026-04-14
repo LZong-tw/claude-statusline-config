@@ -85,9 +85,10 @@
         "commandPath": "~/.claude/cache-savings.sh"
       },
       {
-        "id": "72c2a2ae-1158-4d49-bdfe-67d9463b478d",
-        "type": "version",
-        "backgroundColor": "bgBrightCyan"
+        "id": "3a9eff05-d282-4357-908a-09515ea2b571",
+        "type": "custom-command",
+        "backgroundColor": "bgBrightYellow",
+        "commandPath": "~/.claude/cache-roi.sh"
       }
     ]
   ],
@@ -113,6 +114,7 @@
       ""
     ],
     "endCaps": [
+      "",
       "",
       "",
       ""
