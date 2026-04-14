@@ -27,6 +27,11 @@
         "backgroundColor": "bgBrightBlue"
       },
       {
+        "id": "613a4b9a-89cd-4c3d-a079-5148213ff114",
+        "type": "version",
+        "backgroundColor": "bgYellow"
+      },
+      {
         "id": "5",
         "type": "git-branch",
         "color": "magenta"
