@@ -49,12 +49,14 @@
     ],
     [
       {
-        "id": "fc809140-362c-475e-a44b-5c4f3fafc990",
-        "type": "session-cost"
+        "id": "78420571-3edd-4af6-aabe-5adfb4689150",
+        "type": "custom-command",
+        "backgroundColor": "bgBrightYellow",
+        "commandPath": "  ~/.claude/cache-recent.sh"
       },
       {
-        "id": "c0c45e06-b5d9-44ed-aa00-5cd20b50fa82",
-        "type": "session-clock"
+        "id": "fc809140-362c-475e-a44b-5c4f3fafc990",
+        "type": "session-cost"
       },
       {
         "id": "9fa1e993-e211-4ffa-901e-aa22a46e4a84",
@@ -65,10 +67,8 @@
         }
       },
       {
-        "id": "78420571-3edd-4af6-aabe-5adfb4689150",
-        "type": "custom-command",
-        "backgroundColor": "bgBrightYellow",
-        "commandPath": "  ~/.claude/cache-recent.sh"
+        "id": "c0c45e06-b5d9-44ed-aa00-5cd20b50fa82",
+        "type": "session-clock"
       }
     ],
     [
@@ -77,18 +77,6 @@
         "type": "custom-command",
         "backgroundColor": "bgBrightBlack",
         "commandPath": "~/.claude/cache-read.sh"
-      },
-      {
-        "id": "3b7c4d15-9a37-4e61-9020-6bacf11634de",
-        "type": "custom-command",
-        "backgroundColor": "bgBrightCyan",
-        "commandPath": "~/.claude/cache-creation.sh"
-      },
-      {
-        "id": "b005a132-e79a-4d38-b28c-f2b8eb75056f",
-        "type": "custom-command",
-        "backgroundColor": "bgBrightBlue",
-        "commandPath": "~/.claude/cache-input.sh"
       },
       {
         "id": "5af08ee2-eea5-4f89-81b7-bbc8b78e0917",
@@ -101,6 +89,18 @@
         "type": "custom-command",
         "backgroundColor": "bgBrightYellow",
         "commandPath": "~/.claude/cache-roi.sh"
+      },
+      {
+        "id": "3b7c4d15-9a37-4e61-9020-6bacf11634de",
+        "type": "custom-command",
+        "backgroundColor": "bgBrightCyan",
+        "commandPath": "~/.claude/cache-creation.sh"
+      },
+      {
+        "id": "b005a132-e79a-4d38-b28c-f2b8eb75056f",
+        "type": "custom-command",
+        "backgroundColor": "bgBrightBlue",
+        "commandPath": "~/.claude/cache-input.sh"
       }
     ]
   ],

@@ -35,11 +35,13 @@ Inspired by [nnaveenraju/claude-code-status-line](https://github.com/nnaveenraju
 ```
 Line 1: Tokens In · Tokens Out · Tokens Total · Thinking Effort
 Line 2: Model (custom) · Version · Git Branch · Git Worktree · Git Changes
-Line 3: Session Cost · Session Clock · Context Bar · T8 Recent
-Line 4: ReadCache · CacheCreate · Uncached · Saved · ROI
+Line 3: T8 Recent · Session Cost · Context Bar · Session Clock
+Line 4: ReadCache · Saved · ROI · CacheCreate · Uncached
 ```
 
 Theme: nord-aurora · Powerline enabled
+
+**Widget order is intentional.** ccstatusline truncates from the right on narrow screens, so important widgets are placed on the left. On Line 3, T8 and Cost survive truncation; Context Bar and Session Clock get cut first. On Line 4, ReadCache/Saved/ROI are preserved; CacheCreate/Uncached are cut first.
 
 ## Design
 
