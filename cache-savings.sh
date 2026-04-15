@@ -23,5 +23,5 @@ END {
   saved = baseline - effective
   if (baseline > 0) pct = (1 - effective / baseline) * 100
   else pct = 0
-  printf "Saved: $%.2f (%.0f%%)\n", saved, pct
+  printf "S:$%.2f (%.0f%%)\n", saved, pct
 }'

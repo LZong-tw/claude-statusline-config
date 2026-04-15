@@ -11,5 +11,5 @@ jq -r 'select(.type == "assistant") | .message.usage | [(.cache_read_input_token
 END {
   if (creation > 0) roi = read / creation
   else roi = 0
-  printf "ROI: %.1fx\n", roi
+  printf "ROI:%.1fx\n", roi
 }'

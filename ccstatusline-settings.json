@@ -22,9 +22,10 @@
     ],
     [
       {
-        "id": "c8c65d5e-a0b6-4506-b7bc-b7635216122e",
-        "type": "model",
-        "backgroundColor": "bgBrightBlue"
+        "id": "06353f03-a502-4218-9011-280ac15d5cd1",
+        "type": "custom-command",
+        "backgroundColor": "bgMagenta",
+        "commandPath": "~/.claude/model-name.sh"
       },
       {
         "id": "613a4b9a-89cd-4c3d-a079-5148213ff114",
@@ -57,11 +58,7 @@
       },
       {
         "id": "9fa1e993-e211-4ffa-901e-aa22a46e4a84",
-        "type": "context-bar",
-        "backgroundColor": "bgBlue",
-        "metadata": {
-          "display": "progress-short"
-        }
+        "type": "context-percentage"
       },
       {
         "id": "78420571-3edd-4af6-aabe-5adfb4689150",
