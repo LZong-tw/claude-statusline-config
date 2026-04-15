@@ -27,6 +27,8 @@ Inspired by [nnaveenraju/claude-code-status-line](https://github.com/nnaveenraju
 | ■ | API call: cache hit |
 | □ | API call: cache miss |
 | + | More than 10 API calls in this turn (truncated) |
+| ⏳ | Turn in progress / awaiting response |
+| … | Older turns' breakdown trimmed (newest preserved) |
 
 ## Layout
 
@@ -44,7 +46,9 @@ Theme: nord-aurora · Powerline enabled
 - **Project-scoped**: reads `workspace.current_dir` from ccstatusline stdin to find the correct project's JSONL, not just the most recently modified file globally
 - **Includes subagents**: aggregates token usage from the main session + all subagent JSONL files in the session's `subagents/` directory
 - **Per-model pricing**: `cache-savings.sh` uses actual model prices (Opus=$5, Sonnet=$3, Haiku=$1 per 1M input) for accurate USD savings
-- **Turn-level tracking**: `cache-recent.sh` groups API calls by user turn, so each dot represents an actual interaction rather than a single API call in a tool-use loop
+- **Turn-level tracking**: `cache-recent.sh` groups API calls by user turn, so each dot represents an actual interaction rather than a single API call in a tool-use loop. Consecutive user entries (e.g. image uploads) are merged into one turn
+- **Dynamic width**: breakdown length adapts to terminal width (`tput cols × 15%`), trimming oldest turns first so newest data is always visible
+- **Pending indicator**: turns awaiting a response show ⏳ instead of being silently dropped
 
 ## Setup
 
