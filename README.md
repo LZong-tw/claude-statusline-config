@@ -13,6 +13,7 @@ Inspired by [nnaveenraju/claude-code-status-line](https://github.com/nnaveenraju
 | `cache-input.sh` | `Uncached: 234` | `input_tokens` (full-price, no cache) |
 | `cache-savings.sh` | `Saved: $159.87 (85%)` | Actual USD saved + cost savings rate |
 | `cache-roi.sh` | `ROI: 17.4x` | `cache_read / cache_creation` ratio |
+| `cache-recent.sh` | `L5: ●●●●○` | Last 5 requests: ● = cache hit, ○ = miss |
 | `ccstatusline-settings.json` | — | ccstatusline 4-line Powerline layout |
 
 ## Layout
@@ -20,7 +21,7 @@ Inspired by [nnaveenraju/claude-code-status-line](https://github.com/nnaveenraju
 ```
 Line 1: Tokens In · Tokens Out · Tokens Total · Thinking Effort
 Line 2: Model · Version · Git Branch · Git Worktree · Git Changes
-Line 3: Session Cost · Session Clock · Context Bar
+Line 3: Session Cost · Session Clock · Context Bar · L5 Recent
 Line 4: ReadCache · CacheCreate · Uncached · Saved · ROI
 ```
 
@@ -49,6 +50,7 @@ Or add the 5 cache widgets manually via the ccstatusline TUI — add a **Custom 
 ~/.claude/cache-input.sh
 ~/.claude/cache-savings.sh
 ~/.claude/cache-roi.sh
+~/.claude/cache-recent.sh
 ```
 
 ### 3. Powerline caps for 4+ lines
