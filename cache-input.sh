@@ -10,5 +10,5 @@ END {
   if (sum >= 1000000) val = sprintf("%.1fM", sum/1000000)
   else if (sum >= 1000) val = sprintf("%.1fK", sum/1000)
   else val = sum
-  printf "UC: %s\n", val
+  printf "Uncached: %s\n", val
 }'

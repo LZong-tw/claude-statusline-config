@@ -1,4 +1,7 @@
 #!/bin/bash
+# NOTE: terminal width detection unavailable in ccstatusline custom command context
+# (tput/stty/COLUMNS all return 80 due to piped stdio). Full labels always used.
+# See: https://github.com/sirmalloc/ccstatusline/issues/XXX
 set -o pipefail
 source ~/.claude/claude-jsonl.sh
 [ -z "$JSONL" ] && exit 0
@@ -12,5 +15,5 @@ END {
   if (read >= 1000000) val = sprintf("%.1fM", read/1000000)
   else if (read >= 1000) val = sprintf("%.1fK", read/1000)
   else val = read
-  printf "RC: %s (%.0f%%)\n", val, rate
+  printf "ReadCache: %s (%.0f%%)\n", val, rate
 }'

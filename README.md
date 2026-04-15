@@ -10,10 +10,10 @@ Inspired by [nnaveenraju/claude-code-status-line](https://github.com/nnaveenraju
 |------|-------------|---------------|
 | `claude-jsonl.sh` | — | Shared helper: finds current project's session JSONL from stdin |
 | `model-name.sh` | `Sonnet 4.6 1M` | Model name, trimmed |
-| `cache-read.sh` | `RC: 58.4M (94%)` | `cache_read_input_tokens` + hit rate % |
-| `cache-creation.sh` | `CC: 3.7M` | `cache_creation_input_tokens` |
-| `cache-input.sh` | `UC: 534` | `input_tokens` (full-price, no cache) |
-| `cache-savings.sh` | `S:$210.47 (84%)` | Actual USD saved + cost savings rate |
+| `cache-read.sh` | `ReadCache: 58.4M (94%)` | `cache_read_input_tokens` + hit rate % |
+| `cache-creation.sh` | `CacheCreate: 3.7M` | `cache_creation_input_tokens` |
+| `cache-input.sh` | `Uncached: 534` | `input_tokens` (full-price, no cache) |
+| `cache-savings.sh` | `Saved:$210.47 (84%)` | Actual USD saved + cost savings rate |
 | `cache-roi.sh` | `ROI:17.4x` | `cache_read / cache_creation` ratio |
 | `cache-recent.sh` | `T8: ●●●○●●●●  ■■│■│■■■│□│■■│■│■│■` | Last 8 user turns + API call breakdown |
 
@@ -35,8 +35,8 @@ Inspired by [nnaveenraju/claude-code-status-line](https://github.com/nnaveenraju
 ```
 Line 1: Tokens In · Tokens Out · Tokens Total · Thinking Effort
 Line 2: Model (custom) · Version · Git Branch · Git Worktree · Git Changes
-Line 3: Session Cost · Session Clock · Context % · T8 Recent
-Line 4: RC · CC · UC · Saved · ROI
+Line 3: Session Cost · Session Clock · Context Bar · T8 Recent
+Line 4: ReadCache · CacheCreate · Uncached · Saved · ROI
 ```
 
 Theme: nord-aurora · Powerline enabled
@@ -47,8 +47,14 @@ Theme: nord-aurora · Powerline enabled
 - **Includes subagents**: aggregates token usage from the main session + all subagent JSONL files in the session's `subagents/` directory
 - **Per-model pricing**: `cache-savings.sh` uses actual model prices (Opus=$5, Sonnet=$3, Haiku=$1 per 1M input) for accurate USD savings
 - **Turn-level tracking**: `cache-recent.sh` groups API calls by user turn, so each dot represents an actual interaction rather than a single API call in a tool-use loop. Consecutive user entries (e.g. image uploads) are merged into one turn
-- **Dynamic width**: breakdown length adapts to terminal width (`tput cols × 15%`), trimming oldest turns first so newest data is always visible
+- **Dynamic width**: breakdown length adapts to terminal width, trimming oldest turns first so newest data is always visible
 - **Pending indicator**: turns awaiting a response show ⏳ instead of being silently dropped
+
+## Known Limitations
+
+- **No adaptive labels**: `tput cols`, `stty size`, and `$COLUMNS` all return 80 inside ccstatusline custom command context (piped stdio). Full labels are always used; ccstatusline handles truncation on narrow terminals. Tracked at [sirmalloc/ccstatusline#308](https://github.com/sirmalloc/ccstatusline/issues/308) — once `terminalWidth` is exposed in the stdin JSON, scripts can switch between full/abbreviated labels.
+- **Session identification**: when multiple Claude Code sessions exist in the same project directory, the scripts read the most recently modified JSONL. If two sessions run simultaneously in the same directory, the statusline may show data from the other session.
+- **Pricing hardcoded**: `cache-savings.sh` has Anthropic pricing as of 2026-04-15. Update the script if pricing changes.
 
 ## Setup
 
@@ -110,3 +116,4 @@ Pricing as of 2026-04-15, per 1M input tokens:
 
 - [nnaveenraju/claude-code-status-line#1](https://github.com/nnaveenraju/claude-code-status-line/pull/1) — upstream PR with these scripts
 - [sirmalloc/ccstatusline#305](https://github.com/sirmalloc/ccstatusline/issues/305) — Powerline caps TUI support for 4+ lines
+- [sirmalloc/ccstatusline#308](https://github.com/sirmalloc/ccstatusline/issues/308) — Pass terminalWidth in custom command stdin JSON

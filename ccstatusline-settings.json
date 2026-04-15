@@ -58,7 +58,11 @@
       },
       {
         "id": "9fa1e993-e211-4ffa-901e-aa22a46e4a84",
-        "type": "context-percentage"
+        "type": "context-bar",
+        "backgroundColor": "bgBlue",
+        "metadata": {
+          "display": "progress-short"
+        }
       },
       {
         "id": "78420571-3edd-4af6-aabe-5adfb4689150",
