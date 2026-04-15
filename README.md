@@ -13,7 +13,7 @@ Inspired by [nnaveenraju/claude-code-status-line](https://github.com/nnaveenraju
 | `cache-input.sh` | `Uncached: 234` | `input_tokens` (full-price, no cache) |
 | `cache-savings.sh` | `Saved: $159.87 (85%)` | Actual USD saved + cost savings rate |
 | `cache-roi.sh` | `ROI: 17.4x` | `cache_read / cache_creation` ratio |
-| `cache-recent.sh` | `L5: ●●●●○` | Last 5 requests: ● = cache hit, ○ = miss |
+| `cache-recent.sh` | `T5: ●●●○●  ■■│■│■■■│□│■■` | Last 5 user turns (●/○) + API call breakdown per turn (■/□) |
 | `ccstatusline-settings.json` | — | ccstatusline 4-line Powerline layout |
 
 ## Layout
@@ -21,7 +21,7 @@ Inspired by [nnaveenraju/claude-code-status-line](https://github.com/nnaveenraju
 ```
 Line 1: Tokens In · Tokens Out · Tokens Total · Thinking Effort
 Line 2: Model · Version · Git Branch · Git Worktree · Git Changes
-Line 3: Session Cost · Session Clock · Context Bar · L5 Recent
+Line 3: Session Cost · Session Clock · Context Bar · T5 Recent
 Line 4: ReadCache · CacheCreate · Uncached · Saved · ROI
 ```
 
