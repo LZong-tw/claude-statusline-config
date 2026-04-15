@@ -8,33 +8,51 @@ Inspired by [nnaveenraju/claude-code-status-line](https://github.com/nnaveenraju
 
 | File | Widget label | What it shows |
 |------|-------------|---------------|
-| `model-name.sh` | `Sonnet 4.6 1M` | Model name, trimmed — removes "Claude " prefix, "(1M context)" → "1M" |
+| `claude-jsonl.sh` | — | Shared helper: finds current project's session JSONL from stdin |
+| `model-name.sh` | `Sonnet 4.6 1M` | Model name, trimmed |
 | `cache-read.sh` | `RC: 58.4M (94%)` | `cache_read_input_tokens` + hit rate % |
 | `cache-creation.sh` | `CC: 3.7M` | `cache_creation_input_tokens` |
 | `cache-input.sh` | `UC: 534` | `input_tokens` (full-price, no cache) |
 | `cache-savings.sh` | `S:$210.47 (84%)` | Actual USD saved + cost savings rate |
 | `cache-roi.sh` | `ROI:17.4x` | `cache_read / cache_creation` ratio |
-| `cache-recent.sh` | `T5: ●●●○●  ■■│■│■■■│□│■■` | Last 5 user turns (●/○) + API call breakdown per turn (■/□) |
-| `ccstatusline-settings.json` | — | ccstatusline 4-line Powerline layout |
+| `cache-recent.sh` | `T8: ●●●○●●●●  ■■│■│■■■│□│■■│■│■│■` | Last 8 user turns + API call breakdown |
+
+### Symbols
+
+| Symbol | Meaning |
+|--------|---------|
+| ● | User turn: cache hit (>50% of tokens from cache) |
+| ○ | User turn: cache miss |
+| ◌ | User turn: no data (no assistant response yet) |
+| ■ | API call: cache hit |
+| □ | API call: cache miss |
+| + | More than 10 API calls in this turn (truncated) |
 
 ## Layout
 
 ```
 Line 1: Tokens In · Tokens Out · Tokens Total · Thinking Effort
 Line 2: Model (custom) · Version · Git Branch · Git Worktree · Git Changes
-Line 3: Session Cost · Session Clock · Context % · T5 Recent
+Line 3: Session Cost · Session Clock · Context % · T8 Recent
 Line 4: RC · CC · UC · Saved · ROI
 ```
 
 Theme: nord-aurora · Powerline enabled
+
+## Design
+
+- **Project-scoped**: reads `workspace.current_dir` from ccstatusline stdin to find the correct project's JSONL, not just the most recently modified file globally
+- **Includes subagents**: aggregates token usage from the main session + all subagent JSONL files in the session's `subagents/` directory
+- **Per-model pricing**: `cache-savings.sh` uses actual model prices (Opus=$5, Sonnet=$3, Haiku=$1 per 1M input) for accurate USD savings
+- **Turn-level tracking**: `cache-recent.sh` groups API calls by user turn, so each dot represents an actual interaction rather than a single API call in a tool-use loop
 
 ## Setup
 
 ### 1. Scripts
 
 ```sh
-cp cache-*.sh model-name.sh ~/.claude/
-chmod +x ~/.claude/cache-*.sh ~/.claude/model-name.sh
+cp claude-jsonl.sh cache-*.sh model-name.sh ~/.claude/
+chmod +x ~/.claude/claude-jsonl.sh ~/.claude/cache-*.sh ~/.claude/model-name.sh
 ```
 
 ### 2. ccstatusline settings
@@ -43,7 +61,7 @@ chmod +x ~/.claude/cache-*.sh ~/.claude/model-name.sh
 cp ccstatusline-settings.json ~/.config/ccstatusline/settings.json
 ```
 
-Or configure manually via the ccstatusline TUI — add a **Custom Command** widget for each:
+Or add widgets manually via the ccstatusline TUI — add a **Custom Command** for each:
 
 ```
 ~/.claude/model-name.sh
@@ -70,7 +88,13 @@ saved_usd      = baseline_cost − effective_cost
 saved_pct      = (1 − effective_cost / baseline_cost) × 100
 ```
 
-Pricing per 1M input tokens: Opus 4.6 = $5 · Sonnet 4.6 = $3 · Haiku 4.5 = $1
+Pricing as of 2026-04-15, per 1M input tokens:
+
+| Model | Price |
+|-------|-------|
+| Opus 4.6 | $5.00 |
+| Sonnet 4.6 | $3.00 |
+| Haiku 4.5 | $1.00 |
 
 ## Requirements
 
