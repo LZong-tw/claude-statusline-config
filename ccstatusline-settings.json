@@ -62,6 +62,12 @@
         "metadata": {
           "display": "progress-short"
         }
+      },
+      {
+        "id": "78420571-3edd-4af6-aabe-5adfb4689150",
+        "type": "custom-command",
+        "backgroundColor": "bgBrightYellow",
+        "commandPath": "  ~/.claude/cache-recent.sh"
       }
     ],
     [
