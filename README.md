@@ -57,6 +57,7 @@ Theme: nord-aurora · Powerline enabled
 - **No adaptive labels**: `tput cols`, `stty size`, and `$COLUMNS` all return 80 inside ccstatusline custom command context (piped stdio). Full labels are always used; ccstatusline handles truncation on narrow terminals. Tracked at [sirmalloc/ccstatusline#308](https://github.com/sirmalloc/ccstatusline/issues/308) — once `terminalWidth` is exposed in the stdin JSON, scripts can switch between full/abbreviated labels.
 - **Session identification**: when multiple Claude Code sessions exist in the same project directory, the scripts read the most recently modified JSONL. If two sessions run simultaneously in the same directory, the statusline may show data from the other session.
 - **Pricing hardcoded**: `cache-savings.sh` has Anthropic pricing as of 2026-04-15. Update the script if pricing changes.
+- **Not real-time on new sessions**: scripts read from session JSONL files, which are only written after each API call completes. When starting a new conversation, the statusline briefly shows the previous session's data until the first response in the new session arrives.
 
 ## Setup
 
