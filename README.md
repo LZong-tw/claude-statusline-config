@@ -45,7 +45,7 @@ Theme: nord-aurora · Powerline enabled
 
 ## Design
 
-- **Project-scoped**: reads `workspace.current_dir` from ccstatusline stdin to find the correct project's JSONL, not just the most recently modified file globally
+- **Project-scoped**: reads `workspace.current_dir` from ccstatusline stdin to find the correct project's JSONL, walking up parent directories when Claude runs from a repo subdirectory. It only falls back to the globally newest session when no parent project directory matches
 - **Includes subagents**: aggregates token usage from the main session + all subagent JSONL files in the session's `subagents/` directory
 - **Per-model pricing**: `cache-savings.sh` uses actual model prices (Opus=$5, Sonnet=$3, Haiku=$1 per 1M input) for accurate USD savings
 - **Turn-level tracking**: `cache-recent.sh` groups API calls by user turn, so each dot represents an actual interaction rather than a single API call in a tool-use loop. Consecutive user entries (e.g. image uploads) are merged into one turn

@@ -12,9 +12,26 @@ _cwd=$(printf '%s\n' "$_stdin" | jq -r '.workspace.current_dir // ""' 2>/dev/nul
 JSONL=""
 JSONL_ALL=""
 
+_project_dir_for() {
+  local dir="$1"
+  local slug
+  local candidate
+
+  while [ -n "$dir" ] && [ "$dir" != "/" ]; do
+    slug=$(printf '%s' "$dir" | sed 's|/|-|g')
+    candidate="$HOME/.claude/projects/$slug"
+    if [ -d "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+    dir=${dir%/*}
+  done
+
+  return 1
+}
+
 if [ -n "$_cwd" ]; then
-  _slug=$(printf '%s' "$_cwd" | sed 's|/|-|g')
-  _dir="$HOME/.claude/projects/$_slug"
+  _dir=$(_project_dir_for "$_cwd")
   if [ -d "$_dir" ]; then
     JSONL=$(find "$_dir" -maxdepth 1 -name "*.jsonl" -print0 2>/dev/null | xargs -0 ls -t 2>/dev/null | head -1)
   fi
