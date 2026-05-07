@@ -37,16 +37,28 @@ _project_dir_for() {
   return 1
 }
 
+# Pick the newest file from a newline-separated list. The explicit empty check
+# avoids BSD-xargs-without-`-r` fallthrough where `xargs ls -t` with no input
+# runs `ls -t` against cwd. Portable to GNU and all BSD xargs.
+# Newline-separated is safe here: session jsonl files are UUID-named.
+_newest_from_lines() {
+  local found="$1"
+  [ -z "$found" ] && return 0
+  printf '%s\n' "$found" | tr '\n' '\0' | xargs -0 ls -t 2>/dev/null | head -1
+}
+
 if [ -n "$_cwd" ]; then
   _dir=$(_project_dir_for "$_cwd")
   if [ -d "$_dir" ]; then
-    JSONL=$(find "$_dir" -maxdepth 1 -name "*.jsonl" -print0 2>/dev/null | xargs -0 -r ls -t 2>/dev/null | head -1)
+    _found=$(find "$_dir" -maxdepth 1 -name "*.jsonl" 2>/dev/null)
+    JSONL=$(_newest_from_lines "$_found")
   fi
 fi
 
 # Fallback: most recently modified across all projects
 if [ -z "$JSONL" ]; then
-  JSONL=$(find "$HOME/.claude/projects" -maxdepth 2 -name "*.jsonl" -not -path "*/subagents/*" -print0 2>/dev/null | xargs -0 -r ls -t 2>/dev/null | head -1)
+  _found=$(find "$HOME/.claude/projects" -maxdepth 2 -name "*.jsonl" -not -path "*/subagents/*" 2>/dev/null)
+  JSONL=$(_newest_from_lines "$_found")
 fi
 
 if [ -z "$JSONL" ]; then return 0 2>/dev/null || exit 0; fi
@@ -55,8 +67,11 @@ if [ -z "$JSONL" ]; then return 0 2>/dev/null || exit 0; fi
 JSONL_ALL="$JSONL"
 _session_dir="${JSONL%.jsonl}"
 if [ -d "$_session_dir/subagents" ]; then
-  _subs=$(find "$_session_dir/subagents" -name "*.jsonl" -print0 2>/dev/null | xargs -0 -r ls -t 2>/dev/null)
-  if [ -n "$_subs" ]; then
-    JSONL_ALL="$JSONL"$'\n'"$_subs"
+  _found=$(find "$_session_dir/subagents" -name "*.jsonl" 2>/dev/null)
+  if [ -n "$_found" ]; then
+    _subs=$(printf '%s\n' "$_found" | tr '\n' '\0' | xargs -0 ls -t 2>/dev/null)
+    if [ -n "$_subs" ]; then
+      JSONL_ALL="$JSONL"$'\n'"$_subs"
+    fi
   fi
 fi
