@@ -77,14 +77,16 @@ cp ccstatusline-settings.json ~/.config/ccstatusline/settings.json
 Or add widgets manually via the ccstatusline TUI — add a **Custom Command** for each:
 
 ```
-~/.claude/model-name.sh
-~/.claude/cache-read.sh
-~/.claude/cache-creation.sh
-~/.claude/cache-input.sh
-~/.claude/cache-savings.sh
-~/.claude/cache-roi.sh
-~/.claude/cache-recent.sh
+bash -c "~/.claude/model-name.sh"
+bash -c "~/.claude/cache-read.sh"
+bash -c "~/.claude/cache-creation.sh"
+bash -c "~/.claude/cache-input.sh"
+bash -c "~/.claude/cache-savings.sh"
+bash -c "~/.claude/cache-roi.sh"
+bash -c "~/.claude/cache-recent.sh"
 ```
+
+The `bash -c "…"` wrapper is required for cross-platform support: ccstatusline runs `commandPath` via Node's `execSync`, which on Windows uses `cmd.exe`. `cmd.exe` cannot execute `.sh` files or expand `~`. Wrapping the path in `bash -c` defers both to bash regardless of host shell, and is a no-op cost on macOS/Linux where `bash` is already in `PATH`.
 
 ### 3. Powerline caps for 4+ lines
 
@@ -112,8 +114,9 @@ Pricing as of 2026-04-15, per 1M input tokens:
 ## Requirements
 
 - [ccstatusline](https://github.com/sirmalloc/ccstatusline)
-- `jq`
-- `awk`, `sed` (pre-installed on macOS/Linux)
+- `bash`, `jq`, `awk`, `sed`
+  - macOS/Linux: pre-installed except possibly `jq` (`brew install jq`)
+  - Windows: install [Git for Windows](https://git-scm.com/download/win) (provides `bash` via Git Bash) and `jq` (`scoop install jq` or `choco install jq`). Make sure `C:\Program Files\Git\usr\bin` is in `PATH` so `cmd.exe` can find `bash`.
 
 ## Related
 
