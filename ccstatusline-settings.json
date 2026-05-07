@@ -25,7 +25,8 @@
         "id": "06353f03-a502-4218-9011-280ac15d5cd1",
         "type": "custom-command",
         "backgroundColor": "bgMagenta",
-        "commandPath": "bash -c \"~/.claude/model-name.sh\""
+        "commandPath": "bash -c \"~/.claude/model-name.sh\"",
+        "timeout": 5000
       },
       {
         "id": "613a4b9a-89cd-4c3d-a079-5148213ff114",
@@ -52,7 +53,8 @@
         "id": "78420571-3edd-4af6-aabe-5adfb4689150",
         "type": "custom-command",
         "backgroundColor": "bgBrightYellow",
-        "commandPath": "bash -c \"  ~/.claude/cache-recent.sh\""
+        "commandPath": "bash -c \"  ~/.claude/cache-recent.sh\"",
+        "timeout": 5000
       },
       {
         "id": "fc809140-362c-475e-a44b-5c4f3fafc990",
@@ -76,31 +78,36 @@
         "id": "6ec3cd02-6973-4319-be4b-2c6ba2f6865c",
         "type": "custom-command",
         "backgroundColor": "bgBrightBlack",
-        "commandPath": "bash -c \"~/.claude/cache-read.sh\""
+        "commandPath": "bash -c \"~/.claude/cache-read.sh\"",
+        "timeout": 5000
       },
       {
         "id": "5af08ee2-eea5-4f89-81b7-bbc8b78e0917",
         "type": "custom-command",
         "backgroundColor": "bgYellow",
-        "commandPath": "bash -c \"~/.claude/cache-savings.sh\""
+        "commandPath": "bash -c \"~/.claude/cache-savings.sh\"",
+        "timeout": 5000
       },
       {
         "id": "3a9eff05-d282-4357-908a-09515ea2b571",
         "type": "custom-command",
         "backgroundColor": "bgBrightYellow",
-        "commandPath": "bash -c \"~/.claude/cache-roi.sh\""
+        "commandPath": "bash -c \"~/.claude/cache-roi.sh\"",
+        "timeout": 5000
       },
       {
         "id": "3b7c4d15-9a37-4e61-9020-6bacf11634de",
         "type": "custom-command",
         "backgroundColor": "bgBrightCyan",
-        "commandPath": "bash -c \"~/.claude/cache-creation.sh\""
+        "commandPath": "bash -c \"~/.claude/cache-creation.sh\"",
+        "timeout": 5000
       },
       {
         "id": "b005a132-e79a-4d38-b28c-f2b8eb75056f",
         "type": "custom-command",
         "backgroundColor": "bgBrightBlue",
-        "commandPath": "bash -c \"~/.claude/cache-input.sh\""
+        "commandPath": "bash -c \"~/.claude/cache-input.sh\"",
+        "timeout": 5000
       }
     ]
   ],

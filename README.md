@@ -88,6 +88,8 @@ bash -c "~/.claude/cache-recent.sh"
 
 The `bash -c "…"` wrapper is required for cross-platform support: ccstatusline runs `commandPath` via Node's `execSync`, which on Windows uses `cmd.exe`. `cmd.exe` cannot execute `.sh` files or expand `~`. Wrapping the path in `bash -c` defers both to bash regardless of host shell, and is a no-op cost on macOS/Linux where `bash` is already in `PATH`.
 
+Each custom-command widget also sets `"timeout": 5000`. ccstatusline's default per-widget timeout is 1000 ms, which is enough on macOS/Linux but not on Windows: process spawn there is ~10× slower, and the cache widgets fork bash → jq → awk against a multi-MB session JSONL. With the default the cache widgets would render as `[Timeout]`. 5000 ms is a comfortable ceiling — actual measured wall-time on Windows is ~1.0–1.1 s per widget.
+
 ### 3. Powerline caps for 4+ lines
 
 ccstatusline's TUI only exposes caps settings for the first 3 lines. For Line 4, manually add a 4th entry to `startCaps` and `endCaps` in `~/.config/ccstatusline/settings.json` — the included settings file already handles this.
