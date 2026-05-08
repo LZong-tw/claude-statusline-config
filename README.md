@@ -58,6 +58,7 @@ Theme: nord-aurora · Powerline enabled
 - **Session identification**: when multiple Claude Code sessions exist in the same project directory, the scripts read the most recently modified JSONL. If two sessions run simultaneously in the same directory, the statusline may show data from the other session.
 - **Pricing hardcoded**: `cache-savings.sh` has Anthropic pricing as of 2026-04-15. Update the script if pricing changes.
 - **Not real-time on new sessions**: scripts read from session JSONL files, which are only written after each API call completes. When starting a new conversation, the statusline briefly shows the previous session's data until the first response in the new session arrives.
+- **Cache widgets re-scan JSONL each refresh**: each of the 5 cache widgets independently runs jq across the full session JSONL on every statusline refresh. Per-widget timeout is 5000 ms; under degenerate conditions (50 MB+ session JSONL, slow disk, high CPU contention) widgets can still time out. A bounded fix would parse JSONL once per refresh into a shared cache file and have widgets read pre-computed metrics, but that's a non-trivial refactor.
 
 ## Setup
 
@@ -115,10 +116,20 @@ Pricing as of 2026-04-15, per 1M input tokens:
 
 ## Requirements
 
-- [ccstatusline](https://github.com/sirmalloc/ccstatusline)
+- [ccstatusline](https://github.com/sirmalloc/ccstatusline) ≥ 2.2.9 (earlier versions don't recognize the `xhigh` thinking effort and silently display "medium")
 - `bash`, `jq`, `awk`, `sed`
-  - macOS/Linux: pre-installed except possibly `jq` (`brew install jq`)
-  - Windows: install [Git for Windows](https://git-scm.com/download/win) (provides `bash` via Git Bash) and `jq` (`scoop install jq` or `choco install jq`). Make sure `C:\Program Files\Git\usr\bin` is in `PATH` so `cmd.exe` can find `bash`.
+  - macOS/Linux: pre-installed except possibly `jq` (`brew install jq` or `apt install jq`)
+  - Windows: install [Git for Windows](https://git-scm.com/download/win) and `jq` (`scoop install jq` / `choco install jq`). After install, verify `bash` is reachable from `cmd.exe`:
+
+    ```powershell
+    where.exe bash
+    ```
+
+    If the output is empty, the Git for Windows installer was run with the default "Use Git Bash only" PATH option, which only puts `Git\cmd` on PATH (not `bash`). Pick one of:
+
+    1. **Re-run the Git for Windows installer** and select "Git from the command line and also from 3rd-party software" in the PATH step.
+    2. **Add `C:\Program Files\Git\bin` to `PATH`** manually (just `bin`, not `usr\bin` — the latter shadows several Windows builtins).
+    3. **Hardcode the absolute path** in `commandPath` entries of `~/.config/ccstatusline/settings.json`, e.g. `"C:/Program Files/Git/bin/bash.exe" -c "~/.claude/cache-read.sh"`. This breaks portability of the settings file but avoids touching `PATH`.
 
 ## Related
 

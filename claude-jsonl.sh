@@ -8,8 +8,10 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:$PATH"
 
 _stdin=$(cat)
 _cwd=$(printf '%s\n' "$_stdin" | jq -r '.workspace.current_dir // ""' 2>/dev/null)
-# Normalize Windows backslashes so the same logic works under Git Bash / MSYS
-_cwd=${_cwd//\\//}
+# Normalize Windows backslashes so the same logic works under Git Bash / MSYS.
+# Gate on Windows-shaped paths (drive letter or UNC) so a legitimate Linux
+# filename containing a literal backslash isn't silently corrupted.
+case "$_cwd" in [A-Za-z]:*) _cwd=${_cwd//\\//} ;; esac
 
 JSONL=""
 JSONL_ALL=""
@@ -37,28 +39,28 @@ _project_dir_for() {
   return 1
 }
 
-# Pick the newest file from a newline-separated list. The explicit empty check
-# avoids BSD-xargs-without-`-r` fallthrough where `xargs ls -t` with no input
-# runs `ls -t` against cwd. Portable to GNU and all BSD xargs.
-# Newline-separated is safe here: session jsonl files are UUID-named.
-_newest_from_lines() {
-  local found="$1"
-  [ -z "$found" ] && return 0
-  printf '%s\n' "$found" | tr '\n' '\0' | xargs -0 ls -t 2>/dev/null | head -1
+# mtime-sort find matches without BSD xargs `-r` and without losing NUL framing.
+# - `find -print -quit` is a cheap non-empty probe that exits on first match.
+# - Only when there's at least one match do we run the full `find -print0 |
+#   xargs -0 ls -t` pipeline, which keeps NUL framing intact end-to-end.
+# Capturing find output to a shell variable would strip NULs (command
+# substitution) and re-splitting on newlines would be unsafe for filenames
+# containing literal `\n`.
+_jsonl_mtime_sorted() {
+  [ -n "$(find "$@" -print -quit 2>/dev/null)" ] || return 0
+  find "$@" -print0 2>/dev/null | xargs -0 ls -t 2>/dev/null
 }
 
 if [ -n "$_cwd" ]; then
   _dir=$(_project_dir_for "$_cwd")
   if [ -d "$_dir" ]; then
-    _found=$(find "$_dir" -maxdepth 1 -name "*.jsonl" 2>/dev/null)
-    JSONL=$(_newest_from_lines "$_found")
+    JSONL=$(_jsonl_mtime_sorted "$_dir" -maxdepth 1 -name "*.jsonl" | head -1)
   fi
 fi
 
 # Fallback: most recently modified across all projects
 if [ -z "$JSONL" ]; then
-  _found=$(find "$HOME/.claude/projects" -maxdepth 2 -name "*.jsonl" -not -path "*/subagents/*" 2>/dev/null)
-  JSONL=$(_newest_from_lines "$_found")
+  JSONL=$(_jsonl_mtime_sorted "$HOME/.claude/projects" -maxdepth 2 -name "*.jsonl" -not -path "*/subagents/*" | head -1)
 fi
 
 if [ -z "$JSONL" ]; then return 0 2>/dev/null || exit 0; fi
@@ -67,11 +69,8 @@ if [ -z "$JSONL" ]; then return 0 2>/dev/null || exit 0; fi
 JSONL_ALL="$JSONL"
 _session_dir="${JSONL%.jsonl}"
 if [ -d "$_session_dir/subagents" ]; then
-  _found=$(find "$_session_dir/subagents" -name "*.jsonl" 2>/dev/null)
-  if [ -n "$_found" ]; then
-    _subs=$(printf '%s\n' "$_found" | tr '\n' '\0' | xargs -0 ls -t 2>/dev/null)
-    if [ -n "$_subs" ]; then
-      JSONL_ALL="$JSONL"$'\n'"$_subs"
-    fi
+  _subs=$(_jsonl_mtime_sorted "$_session_dir/subagents" -name "*.jsonl")
+  if [ -n "$_subs" ]; then
+    JSONL_ALL="$JSONL"$'\n'"$_subs"
   fi
 fi
