@@ -45,7 +45,7 @@ Theme: nord-aurora · Powerline enabled
 
 ## Design
 
-- **Project-scoped**: reads `workspace.current_dir` from ccstatusline stdin to find the correct project's JSONL, walking up parent directories when Claude runs from a repo subdirectory. It only falls back to the globally newest session when no parent project directory matches
+- **Session-scoped via `transcript_path`**: reads the active session's JSONL path directly from ccstatusline stdin's `transcript_path` field (provided by Claude Code 2.x). Falls back to walking parent directories of `workspace.current_dir` to locate the matching project slug under `~/.claude/projects/` only when `transcript_path` is missing or stale. The fast path is also more correct — it always points at THIS session, rather than picking "newest JSONL in the project dir" which would misattribute when multiple sessions share a cwd.
 - **Includes subagents**: aggregates token usage from the main session + all subagent JSONL files in the session's `subagents/` directory
 - **Per-model pricing**: `cache-savings.sh` uses actual model prices (Opus=$5, Sonnet=$3, Haiku=$1 per 1M input) for accurate USD savings
 - **Turn-level tracking**: `cache-recent.sh` groups API calls by user turn, so each dot represents an actual interaction rather than a single API call in a tool-use loop. Consecutive user entries (e.g. image uploads) are merged into one turn
@@ -58,7 +58,43 @@ Theme: nord-aurora · Powerline enabled
 - **Session identification**: when multiple Claude Code sessions exist in the same project directory, the scripts read the most recently modified JSONL. If two sessions run simultaneously in the same directory, the statusline may show data from the other session.
 - **Pricing hardcoded**: `cache-savings.sh` has Anthropic pricing as of 2026-04-15. Update the script if pricing changes.
 - **Not real-time on new sessions**: scripts read from session JSONL files, which are only written after each API call completes. When starting a new conversation, the statusline briefly shows the previous session's data until the first response in the new session arrives.
-- **Cache widgets re-scan JSONL each refresh**: each of the 5 cache widgets independently runs jq across the full session JSONL on every statusline refresh. Per-widget timeout is 5000 ms; under degenerate conditions (50 MB+ session JSONL, slow disk, high CPU contention) widgets can still time out. A bounded fix would parse JSONL once per refresh into a shared cache file and have widgets read pre-computed metrics, but that's a non-trivial refactor.
+- **Cache widgets re-scan JSONL each refresh**: each of the 5 cache widgets independently runs `jq` across `$JSONL_ALL` on every statusline refresh. Per-widget timeout is 5000 ms; on the maintainer's 1.8 MB live JSONL with 9 subagent files, mean wall time is ~1.3 s per widget after optimization. Under degenerate conditions (50 MB+ JSONL, slow disk, high CPU contention) widgets can still time out. A bounded design would precompute aggregated metrics once per refresh into a shared cache file. **An implementation of that shared-cache approach was prototyped and rejected as a regression on Windows** — see _Performance notes_ below for why.
+
+## Performance notes
+
+These are written down so the next contributor doesn't waste a day re-discovering them. Numbers below were measured on Windows + Git Bash against a real session: 1.8 MB main JSONL + 9 subagent files. macOS/Linux is faster across the board; everything here is more pronounced on Windows because every process spawn costs 50–100 ms.
+
+### What the bottleneck actually is
+
+The instinct on first look is "5 cache widgets each scan a 2 MB JSONL with `jq` — that's the bottleneck." It isn't. A single `jq` pass over 2 MB takes ~80 ms. The real cost is **process spawns inside `claude-jsonl.sh`**: walking parent directories with `sed` per level, two `find` invocations per discovered directory, and (originally) a fork-per-file `jq` loop in each widget. Pre-optimization total per ccstatusline refresh was **~14.96 s**. After all of the changes below, **~8.65 s — 1.73× faster, with each widget comfortably under the 5000 ms timeout**.
+
+### What worked
+
+1. **Use `transcript_path` from stdin instead of cwd-walk discovery.** Claude Code passes the active session's JSONL path directly. Trusting it lets `claude-jsonl.sh` skip the find/walk-parents/sed pipeline entirely. Single-widget claude-jsonl.sh source dropped from ~1000 ms to ~300 ms.
+2. **Single `jq` invocation across all `$JSONL_ALL` files.** Each cache widget previously did `while read f; do jq -r '...' "$f"; done`, spawning N `jq` processes for N files. Replaced with `printf '%s\n' "$JSONL_ALL" | tr '\n' '\0' | xargs -0 jq -r '...'` — one `jq` with all paths as args. Isolated jq aggregation on 10 files dropped from 1.99 s to 0.12 s (16×).
+3. **Subagent enumeration via shell glob, not `find`.** Replacing `find subagents -name "*.jsonl" -print -quit` + `find ... -print0 | xargs -0 ls -t` with a `shopt -s nullglob` + `for f in subagents/*.jsonl` saved ~3 forks per widget refresh. Order within subagents doesn't matter to any consumer, so the mtime sort was wasted work.
+
+### What was tried and didn't work
+
+A **shared metrics cache file** (one `jq`+`awk` aggregation pass per refresh, written to `$TMPDIR`, sourced as bash env vars by widgets) was implemented and benchmarked. The premise — "each widget independently runs `jq` over JSONL, so cache the aggregation" — sounded right but turned out to be the wrong target on Windows:
+
+- A single `jq` pass over a 2 MB JSONL is ~80 ms.
+- The cache-hit machinery cost is `sha1sum` (~60 ms) + `stat × 2` (~70 ms) + `source` (~50 ms) = **~180 ms**.
+- On Windows the cache is *more expensive than the work it skips*. Net regression: ~100 ms slower per widget; A/B over 10 runs went 3.77 s → 5.55 s.
+
+The version that was committed (transcript_path + multi-file `jq` + glob subagents) is the right Windows fix and a no-op cost on macOS/Linux. If you ever want to push further, the next viable target is **caching the resolved `$JSONL`/`$JSONL_ALL` themselves** (so widgets 2–6 of one refresh skip the entire `claude-jsonl.sh` source), not caching aggregated metrics. Estimated additional saving ~1.5 s per refresh, but it was not pursued — diminishing returns after 1.73× and the cache-invalidation rules are non-trivial.
+
+### How to reproduce a benchmark
+
+```sh
+# Build a frozen snapshot to avoid the live JSONL changing under your feet
+cp ~/.claude/projects/<your-slug>/<session-id>.jsonl /tmp/snap.jsonl
+
+# Then run all 7 widgets back to back via Node's execSync, the same way
+# ccstatusline does. Measure total wall time for ~5 rounds and report mean.
+```
+
+Headline rule: **measure before optimizing**. The first attempt at speeding this up went after the wrong target precisely because intuition pointed at `jq`-on-JSONL, which on Windows turns out not to be the bottleneck.
 
 ## Setup
 
