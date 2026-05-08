@@ -77,12 +77,15 @@ fi
 
 if [ -z "$JSONL" ]; then return 0 2>/dev/null || exit 0; fi
 
-# Build JSONL_ALL: main session + its subagents
+# Build JSONL_ALL: main session + its subagents. Use a shell glob (pure
+# builtin, zero forks) instead of `find | xargs ls -t` — order within
+# subagents doesn't matter for any consumer, so mtime sort is wasted work.
 JSONL_ALL="$JSONL"
 _session_dir="${JSONL%.jsonl}"
 if [ -d "$_session_dir/subagents" ]; then
-  _subs=$(_jsonl_mtime_sorted "$_session_dir/subagents" -name "*.jsonl")
-  if [ -n "$_subs" ]; then
-    JSONL_ALL="$JSONL"$'\n'"$_subs"
-  fi
+  shopt -s nullglob
+  for _f in "$_session_dir/subagents"/*.jsonl; do
+    JSONL_ALL="$JSONL_ALL"$'\n'"$_f"
+  done
+  shopt -u nullglob
 fi

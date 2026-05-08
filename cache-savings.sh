@@ -5,9 +5,7 @@
 set -o pipefail
 source ~/.claude/claude-jsonl.sh
 [ -z "$JSONL" ] && exit 0
-echo "$JSONL_ALL" | while IFS= read -r f; do
-  jq -r 'select(.type == "assistant") | [.message.model, (.message.usage.cache_read_input_tokens // 0), (.message.usage.cache_creation_input_tokens // 0), (.message.usage.input_tokens // 0)] | @tsv' "$f" 2>/dev/null
-done | awk -F '\t' '
+printf '%s\n' "$JSONL_ALL" | tr '\n' '\0' | xargs -0 jq -r 'select(.type == "assistant") | [.message.model, (.message.usage.cache_read_input_tokens // 0), (.message.usage.cache_creation_input_tokens // 0), (.message.usage.input_tokens // 0)] | @tsv' 2>/dev/null | awk -F '\t' '
 {
   model = $1; read = $2+0; creation = $3+0; input = $4+0
   if (model ~ /opus/)        price = 5.0

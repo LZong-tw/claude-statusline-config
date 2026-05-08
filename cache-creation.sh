@@ -2,9 +2,7 @@
 set -o pipefail
 source ~/.claude/claude-jsonl.sh
 [ -z "$JSONL" ] && exit 0
-echo "$JSONL_ALL" | while IFS= read -r f; do
-  jq -r 'select(.type == "assistant") | .message.usage | (.cache_creation_input_tokens // 0)' "$f" 2>/dev/null
-done | awk '
+printf '%s\n' "$JSONL_ALL" | tr '\n' '\0' | xargs -0 jq -r 'select(.type == "assistant") | .message.usage | (.cache_creation_input_tokens // 0)' 2>/dev/null | awk '
 { sum += $1 }
 END {
   if (sum >= 1000000) val = sprintf("%.1fM", sum/1000000)
