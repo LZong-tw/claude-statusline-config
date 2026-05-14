@@ -111,6 +111,20 @@ chmod +x ~/.claude/claude-jsonl.sh ~/.claude/cache-*.sh ~/.claude/model-name.sh
 cp ccstatusline-settings.json ~/.config/ccstatusline/settings.json
 ```
 
+### 3. Claude Code statusLine
+
+Keep Claude Code launching ccstatusline through `npx`, but prefer the local npm cache so status redraws do not block on a slow registry lookup:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "env npm_config_prefer_offline=true npm_config_fetch_timeout=1000 npm_config_fetch_retries=0 npx -y ccstatusline@latest",
+    "padding": 0
+  }
+}
+```
+
 Or add widgets manually via the ccstatusline TUI — add a **Custom Command** for each:
 
 ```
@@ -127,7 +141,7 @@ The `bash -c "…"` wrapper is required for cross-platform support: ccstatusline
 
 Each custom-command widget also sets `"timeout": 5000`. ccstatusline's default per-widget timeout is 1000 ms, which is enough on macOS/Linux but not on Windows: process spawn there is ~10× slower, and the cache widgets fork bash → jq → awk against a multi-MB session JSONL. With the default the cache widgets would render as `[Timeout]`. 5000 ms is a comfortable ceiling — actual measured wall-time on Windows is ~1.0–1.1 s per widget.
 
-### 3. Powerline caps for 4+ lines
+### 4. Powerline caps for 4+ lines
 
 ccstatusline's TUI only exposes caps settings for the first 3 lines. For Line 4, manually add a 4th entry to `startCaps` and `endCaps` in `~/.config/ccstatusline/settings.json` — the included settings file already handles this.
 
