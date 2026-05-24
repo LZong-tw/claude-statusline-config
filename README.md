@@ -16,6 +16,7 @@ Inspired by [nnaveenraju/claude-code-status-line](https://github.com/nnaveenraju
 | `cache-savings.sh` | `Saved:$210.47 (84%)` | Actual USD saved + cost savings rate |
 | `cache-roi.sh` | `ROI:17.4x` | `cache_read / cache_creation` ratio |
 | `cache-recent.sh` | `T8: ●●●○●●●●  ■■│■│■■■│□│■■│■│■│■` | Last 8 user turns + API call breakdown |
+| `hooks/check-ccstatusline.cjs` | — | Optional Claude hook reminder when the global `ccstatusline` package is older than 14 days |
 
 ### Symbols
 
@@ -146,6 +147,40 @@ Each custom-command widget also sets `"timeout": 5000`. ccstatusline's default p
 ccstatusline's TUI only exposes caps settings for the first 3 lines. For Line 4, manually add a 4th entry to `startCaps` and `endCaps` in `~/.config/ccstatusline/settings.json` — the included settings file already handles this.
 
 See [sirmalloc/ccstatusline#305](https://github.com/sirmalloc/ccstatusline/issues/305).
+
+### 4. Optional freshness reminder hook
+
+Install the hook script:
+
+```sh
+mkdir -p ~/.claude/hooks
+cp hooks/check-ccstatusline.cjs ~/.claude/hooks/check-ccstatusline.cjs
+```
+
+Then add it to a Claude Code `SessionStart` hook. Example:
+
+```jsonc
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/check-ccstatusline.cjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The hook is read-only. It checks `npm root -g`, finds the global
+`ccstatusline/package.json`, and emits an `additionalContext` reminder when the
+installed package timestamp is at least 14 days old.
 
 ## How savings are calculated
 
