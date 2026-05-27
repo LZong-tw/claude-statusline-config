@@ -2,7 +2,7 @@
 
 Personal [ccstatusline](https://github.com/sirmalloc/ccstatusline) configuration and cache metrics scripts for Claude Code.
 
-The default config is optimized for Windows Terminal + Claude Code: ccstatusline runs two tiny Node custom commands instead of seven `bash`/`jq`/`awk` widgets. That avoids repeated shell startup and repeated scans of the same live JSONL transcript.
+The default config is optimized for Windows Terminal + Claude Code: ccstatusline keeps the original 4-line visual layout, but the custom widgets now use one Node renderer with an incremental shared cache instead of `bash`/`jq`/`awk` scripts. That avoids repeated shell startup and repeated full scans of the same live JSONL transcript.
 
 Inspired by [nnaveenraju/claude-code-status-line](https://github.com/nnaveenraju/claude-code-status-line) — same JSONL metrics idea, but the Windows path now aggregates the expensive work once.
 
@@ -10,8 +10,8 @@ Inspired by [nnaveenraju/claude-code-status-line](https://github.com/nnaveenraju
 
 | File | Widget label | What it shows |
 |------|-------------|---------------|
-| `statusline-fast.mjs` | `Sonnet 4.6 1M` / `T8: ... Read:... Saved:...` | Windows-optimized Node renderer for model name and all cache/turn metrics |
-| `ccstatusline-settings.json` | — | 3-line ccstatusline layout using `statusline-fast.mjs` |
+| `statusline-fast.mjs` | `Sonnet 4.6 1M` / `T8: ...` / cache metrics | Windows-optimized Node renderer for model name, recent turns, and cache metrics |
+| `ccstatusline-settings.json` | — | 4-line ccstatusline layout using `statusline-fast.mjs` |
 | `claude-jsonl.sh` | — | Legacy helper: finds current project's session JSONL from stdin |
 | `model-name.sh` | `Sonnet 4.6 1M` | Legacy model name widget |
 | `cache-read.sh` | `ReadCache: 58.4M (94%)` | Legacy `cache_read_input_tokens` + hit rate widget |
@@ -40,16 +40,17 @@ Inspired by [nnaveenraju/claude-code-status-line](https://github.com/nnaveenraju
 ```
 Line 1: Tokens In · Tokens Out · Tokens Total · Thinking Effort
 Line 2: Model (fast) · Version · Git Branch · Git Worktree · Git Changes
-Line 3: T8 Recent + Read/Saved/ROI/Create/In (fast) · Session Cost · Context Bar · Session Clock
+Line 3: T8 Recent · Session Cost · Context Bar · Session Clock
+Line 4: ReadCache · Saved · ROI · CacheCreate · Uncached
 ```
 
 Theme: nord-aurora · Powerline enabled
 
-**Widget order is intentional.** ccstatusline truncates from the right on narrow screens, so important widgets are placed on the left. On Line 3, the fast summary and Cost survive truncation; Context Bar and Session Clock get cut first.
+**Widget order is intentional.** ccstatusline truncates from the right on narrow screens, so important widgets are placed on the left. On Line 3, T8 and Cost survive truncation; Context Bar and Session Clock get cut first. On Line 4, ReadCache/Saved/ROI are preserved; CacheCreate/Uncached are cut first.
 
 ## Design
 
-- **One Node process for all cache metrics**: `statusline-fast.mjs summary` computes T8, cache read rate, savings, ROI, cache creation, and uncached input in one pass.
+- **One Node renderer for all custom metrics**: `statusline-fast.mjs` has separate modes for `model`, `recent`, `read`, `savings`, `roi`, `creation`, and `input`, preserving the original widget layout and colors.
 - **Incremental repeat refreshes**: summaries are cached under the OS temp directory (`ccstatusline-fast/<sha1>.json`). Unchanged files are reused, append-only transcript growth reads only the new tail, and truncation rewrites force a clean rescan.
 - **Targeted JSONL scanning**: the fast path extracts only event type, model, and token usage fields instead of fully parsing large message/tool payloads.
 - **No Git Bash requirement on Windows default path**: the default settings use `node "%USERPROFILE%/.claude/statusline-fast.mjs" ...`, so redraws do not pay `bash -> jq -> awk` startup costs.
@@ -76,19 +77,19 @@ The bottleneck is the combination of Windows process startup and repeated JSONL 
 `statusline-fast.mjs` changes the shape of the work:
 
 - model rendering is a tiny JSON parse;
-- cache metrics are computed in one Node process with targeted JSONL field extraction;
+- the first metric refresh updates a shared incremental cache with targeted JSONL field extraction;
 - repeat redraws reuse the temp cache, and transcript appends process only new JSONL lines;
-- the layout drops from 4 lines to 3 lines, reducing rendering work and avoiding the extra Powerline cap workaround.
+- the original 4-line layout is preserved, including the separate metric colors on Line 4.
 
 On the same Windows machine, a current ~30 MB transcript measured roughly:
 
 ```
 model:         ~0.1-0.2 s
-summary cold:  ~0.3 s
-summary cached: <0.1 s
+recent cold:   ~0.3 s
+cache cached:  <0.1 s per metric
 ```
 
-The previous README documented a rejected bash shared-cache prototype. That result was true for a 1.8 MB transcript because the cache machinery cost more than a single `jq` pass. With much larger live transcripts, the better fix is not a bash env cache per widget; it is one Node aggregate widget with file-signature invalidation.
+The previous README documented a rejected bash shared-cache prototype. That result was true for a 1.8 MB transcript because the cache machinery cost more than a single `jq` pass. With much larger live transcripts, the better fix is not a bash env cache per widget; it is one Node renderer with a shared incremental cache.
 
 Headline rule: **measure before optimizing**. On Windows, intuition often points at `jq`, but command startup and repeated discovery dominate.
 
@@ -139,10 +140,15 @@ Or add widgets manually via the ccstatusline TUI:
 
 ```
 node "%USERPROFILE%/.claude/statusline-fast.mjs" model
-node "%USERPROFILE%/.claude/statusline-fast.mjs" summary
+node "%USERPROFILE%/.claude/statusline-fast.mjs" recent
+node "%USERPROFILE%/.claude/statusline-fast.mjs" read
+node "%USERPROFILE%/.claude/statusline-fast.mjs" savings
+node "%USERPROFILE%/.claude/statusline-fast.mjs" roi
+node "%USERPROFILE%/.claude/statusline-fast.mjs" creation
+node "%USERPROFILE%/.claude/statusline-fast.mjs" input
 ```
 
-Each custom-command widget sets a bounded timeout: `2000 ms` for model name and `3000 ms` for the aggregate summary. Current Windows measurements are comfortably below that; if the summary times out, something else is likely starving the machine.
+Each custom-command widget sets a bounded timeout: `2000 ms` for model name and `3000 ms` for the JSONL-backed metrics. Current Windows measurements are comfortably below that; if they time out, something else is likely starving the machine.
 
 ### 4. Optional freshness reminder hook
 

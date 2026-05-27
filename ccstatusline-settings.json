@@ -53,7 +53,7 @@
         "id": "78420571-3edd-4af6-aabe-5adfb4689150",
         "type": "custom-command",
         "backgroundColor": "bgBrightYellow",
-        "commandPath": "node \"%USERPROFILE%/.claude/statusline-fast.mjs\" summary",
+        "commandPath": "node \"%USERPROFILE%/.claude/statusline-fast.mjs\" recent",
         "timeout": 3000
       },
       {
@@ -71,6 +71,43 @@
       {
         "id": "c0c45e06-b5d9-44ed-aa00-5cd20b50fa82",
         "type": "session-clock"
+      }
+    ],
+    [
+      {
+        "id": "6ec3cd02-6973-4319-be4b-2c6ba2f6865c",
+        "type": "custom-command",
+        "backgroundColor": "bgBrightBlack",
+        "commandPath": "node \"%USERPROFILE%/.claude/statusline-fast.mjs\" read",
+        "timeout": 3000
+      },
+      {
+        "id": "5af08ee2-eea5-4f89-81b7-bbc8b78e0917",
+        "type": "custom-command",
+        "backgroundColor": "bgYellow",
+        "commandPath": "node \"%USERPROFILE%/.claude/statusline-fast.mjs\" savings",
+        "timeout": 3000
+      },
+      {
+        "id": "3a9eff05-d282-4357-908a-09515ea2b571",
+        "type": "custom-command",
+        "backgroundColor": "bgBrightYellow",
+        "commandPath": "node \"%USERPROFILE%/.claude/statusline-fast.mjs\" roi",
+        "timeout": 3000
+      },
+      {
+        "id": "3b7c4d15-9a37-4e61-9020-6bacf11634de",
+        "type": "custom-command",
+        "backgroundColor": "bgBrightCyan",
+        "commandPath": "node \"%USERPROFILE%/.claude/statusline-fast.mjs\" creation",
+        "timeout": 3000
+      },
+      {
+        "id": "b005a132-e79a-4d38-b28c-f2b8eb75056f",
+        "type": "custom-command",
+        "backgroundColor": "bgBrightBlue",
+        "commandPath": "node \"%USERPROFILE%/.claude/statusline-fast.mjs\" input",
+        "timeout": 3000
       }
     ]
   ],
@@ -92,9 +129,11 @@
     "startCaps": [
       "",
       "",
-      ""
+      "",
+      ""
     ],
     "endCaps": [
+      "",
       "",
       "",
       ""

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const CACHE_VERSION = 5;
+const CACHE_VERSION = 6;
 const USER_EVENT_RE = /"type"\s*:\s*"user"/;
 const ASSISTANT_EVENT_RE = /"type"\s*:\s*"assistant"/;
 const MODEL_RE = /"model"\s*:\s*"([^"]*)"/;
@@ -357,12 +357,35 @@ function buildRecent(turnState) {
   return `T8:${dots} ${breakdown.join('│')}`;
 }
 
-function formatSummary(totals, turnState) {
+function cacheStats(totals) {
   const totalTokens = totals.read + totals.creation + totals.input;
   const readRate = totalTokens > 0 ? (totals.read * 100) / totalTokens : 0;
   const saved = totals.baseline - totals.effective;
   const savedPct = totals.baseline > 0 ? (1 - totals.effective / totals.baseline) * 100 : 0;
   const roi = totals.creation > 0 ? totals.read / totals.creation : 0;
+
+  return { readRate, roi, saved, savedPct };
+}
+
+function formatMetric(mode, totals, turnState) {
+  const { readRate, roi, saved, savedPct } = cacheStats(totals);
+
+  switch (mode) {
+    case 'recent':
+      return buildRecent(turnState);
+    case 'read':
+      return `ReadCache:${compactNumber(totals.read)} (${Math.round(readRate)}%)`;
+    case 'savings':
+      return `Saved:$${saved.toFixed(2)} (${Math.round(savedPct)}%)`;
+    case 'roi':
+      return `ROI:${roi.toFixed(1)}x`;
+    case 'creation':
+      return `CacheCreate:${compactNumber(totals.creation)}`;
+    case 'input':
+      return `Uncached:${compactNumber(totals.input)}`;
+    default:
+      break;
+  }
 
   return [
     buildRecent(turnState),
@@ -374,7 +397,7 @@ function formatSummary(totals, turnState) {
   ].join('  ');
 }
 
-function computeSummary(transcript) {
+function computeMetrics(transcript) {
   const files = [transcript, ...subagentFilesFor(transcript)];
   const previous = readCache(transcript);
   const previousFiles = previous?.files || {};
@@ -394,9 +417,9 @@ function computeSummary(transcript) {
     totals.effective += fileTotals.effective;
   }
 
-  const summary = formatSummary(totals, nextFiles[transcript]?.turnState);
-  writeCache(transcript, { files: nextFiles, summary });
-  return summary;
+  const turnState = nextFiles[transcript]?.turnState;
+  writeCache(transcript, { files: nextFiles });
+  return { totals, turnState };
 }
 
 function formatModel(payload) {
@@ -421,4 +444,5 @@ if (mode === 'model') {
 const transcript = resolveTranscript(payload);
 if (!transcript) process.exit(0);
 
-process.stdout.write(`${computeSummary(transcript)}\n`);
+const { totals, turnState } = computeMetrics(transcript);
+process.stdout.write(`${formatMetric(mode, totals, turnState)}\n`);
