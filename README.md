@@ -12,6 +12,7 @@ Inspired by [nnaveenraju/claude-code-status-line](https://github.com/nnaveenraju
 |------|-------------|---------------|
 | `statusline-fast.mjs` | `Sonnet 4.6 1M` / `T8: ...` / cache metrics | Windows-optimized Node renderer for model name, recent turns, and cache metrics |
 | `ccstatusline-settings.json` | — | 4-line ccstatusline layout using `statusline-fast.mjs` |
+| `scripts/verify-settings.mjs` | — | Guardrail that fails if the default layout stops matching the original 4-line contract |
 | `claude-jsonl.sh` | — | Legacy helper: finds current project's session JSONL from stdin |
 | `model-name.sh` | `Sonnet 4.6 1M` | Legacy model name widget |
 | `cache-read.sh` | `ReadCache: 58.4M (94%)` | Legacy `cache_read_input_tokens` + hit rate widget |
@@ -52,6 +53,8 @@ Theme: nord-aurora · Powerline enabled
 
 - **One Node renderer for all custom metrics**: `statusline-fast.mjs` has separate modes for `model`, `recent`, `read`, `savings`, `roi`, `creation`, and `input`, preserving the original widget layout and colors.
 - **Incremental repeat refreshes**: summaries are cached under the OS temp directory (`ccstatusline-fast/<sha1>.json`). Unchanged files are reused, append-only transcript growth reads only the new tail, and truncation rewrites force a clean rescan.
+- **Bounded reads**: large JSONL tails are scanned in chunks instead of loading the whole transcript into memory at once.
+- **Cache hygiene**: temp cache files older than 7 days are pruned, and the cache directory is capped at 200 JSON files.
 - **Targeted JSONL scanning**: the fast path extracts only event type, model, and token usage fields instead of fully parsing large message/tool payloads.
 - **No Git Bash requirement on Windows default path**: the default settings use `node "%USERPROFILE%/.claude/statusline-fast.mjs" ...`, so redraws do not pay `bash -> jq -> awk` startup costs.
 - **Session-scoped via `transcript_path`**: reads the active session's JSONL path directly from ccstatusline stdin. It falls back to the matching project slug under `~/.claude/projects/` only when `transcript_path` is missing or stale.
@@ -149,6 +152,12 @@ node "%USERPROFILE%/.claude/statusline-fast.mjs" input
 ```
 
 Each custom-command widget sets a bounded timeout: `2000 ms` for model name and `3000 ms` for the JSONL-backed metrics. Current Windows measurements are comfortably below that; if they time out, something else is likely starving the machine.
+
+Before changing the default layout, run the guard:
+
+```powershell
+node .\scripts\verify-settings.mjs
+```
 
 ### 4. Optional freshness reminder hook
 

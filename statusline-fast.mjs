@@ -5,6 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 
 const CACHE_VERSION = 6;
+const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const CACHE_MAX_FILES = 200;
+const READ_CHUNK_BYTES = 1024 * 1024;
 const USER_EVENT_RE = /"type"\s*:\s*"user"/;
 const ASSISTANT_EVENT_RE = /"type"\s*:\s*"assistant"/;
 const MODEL_RE = /"model"\s*:\s*"([^"]*)"/;
@@ -103,7 +106,38 @@ function subagentFilesFor(transcript) {
 
 function cachePathFor(transcript) {
   const hash = crypto.createHash('sha1').update(transcript).digest('hex');
-  return path.join(os.tmpdir(), 'ccstatusline-fast', `${hash}.json`);
+  return path.join(cacheDir(), `${hash}.json`);
+}
+
+function cacheDir() {
+  return path.join(os.tmpdir(), 'ccstatusline-fast');
+}
+
+function pruneCacheDir() {
+  const dir = cacheDir();
+  if (!fs.existsSync(dir)) return;
+
+  try {
+    const now = Date.now();
+    const entries = fs.readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+      .map((entry) => {
+        const file = path.join(dir, entry.name);
+        const stat = fs.statSync(file);
+        return { file, mtimeMs: stat.mtimeMs };
+      });
+
+    for (const entry of entries) {
+      if (now - entry.mtimeMs > CACHE_MAX_AGE_MS) fs.rmSync(entry.file, { force: true });
+    }
+
+    entries.sort((a, b) => b.mtimeMs - a.mtimeMs);
+    for (const entry of entries.slice(CACHE_MAX_FILES)) {
+      fs.rmSync(entry.file, { force: true });
+    }
+  } catch {
+    // Cache pruning is opportunistic.
+  }
 }
 
 function readCache(transcript) {
@@ -119,6 +153,7 @@ function writeCache(transcript, cache) {
   try {
     const file = cachePathFor(transcript);
     fs.mkdirSync(path.dirname(file), { recursive: true });
+    pruneCacheDir();
     const tmp = `${file}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify({ version: CACHE_VERSION, ...cache }));
     fs.renameSync(tmp, file);
@@ -281,18 +316,40 @@ function parseJsonlBuffer(buffer, onEvent) {
   return lastNewline + 1;
 }
 
-function readFileTail(file, offset, size) {
+function parseFileTail(file, offset, size, onEvent) {
   const length = size - offset;
-  if (length <= 0) return Buffer.alloc(0);
+  if (length <= 0) return 0;
 
   const fd = fs.openSync(file, 'r');
+  const scratch = Buffer.allocUnsafe(Math.min(READ_CHUNK_BYTES, length));
+  let consumed = 0;
+  let pending = Buffer.alloc(0);
+  let position = offset;
+
   try {
-    const buffer = Buffer.allocUnsafe(length);
-    fs.readSync(fd, buffer, 0, length, offset);
-    return buffer;
+    while (position < size) {
+      const bytesToRead = Math.min(scratch.length, size - position);
+      const bytesRead = fs.readSync(fd, scratch, 0, bytesToRead, position);
+      if (bytesRead <= 0) break;
+
+      position += bytesRead;
+      const chunk = scratch.subarray(0, bytesRead);
+      const combined = pending.length > 0 ? Buffer.concat([pending, chunk]) : chunk;
+      const lastNewline = combined.lastIndexOf(10);
+      if (lastNewline === -1) {
+        pending = Buffer.from(combined);
+        continue;
+      }
+
+      parseJsonlBuffer(combined.subarray(0, lastNewline + 1), onEvent);
+      pending = Buffer.from(combined.subarray(lastNewline + 1));
+      consumed = position - offset - pending.length;
+    }
   } finally {
     fs.closeSync(fd);
   }
+
+  return consumed;
 }
 
 function shouldReuseFileState(previous, stat) {
@@ -317,8 +374,7 @@ function updateFileState(file, previous, trackTurns) {
     ? incremental ? normalizeTurnState(previous.turnState) : emptyTurnState()
     : null;
 
-  const buffer = readFileTail(file, offset, stat.size);
-  const consumed = parseJsonlBuffer(buffer, (event) => {
+  const consumed = parseFileTail(file, offset, stat.size, (event) => {
     consumeAssistantUsage(event, totals);
     if (trackTurns) consumeMainTurn(event, turnState);
   });
