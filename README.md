@@ -52,7 +52,7 @@ Theme: nord-aurora · Powerline enabled
 ## Design
 
 - **One Node renderer for all custom metrics**: `statusline-fast.mjs` has separate modes for `model`, `recent`, `read`, `savings`, `roi`, `creation`, and `input`, preserving the original widget layout and colors.
-- **Incremental repeat refreshes**: summaries are cached under the OS temp directory (`ccstatusline-fast/<sha1>.json`). Unchanged files are reused, append-only transcript growth reads only the new tail, and truncation rewrites force a clean rescan.
+- **Incremental repeat refreshes**: metrics are cached under the OS temp directory (`ccstatusline-fast/<sha1>.json`). Unchanged files are reused, append-only transcript growth reads only the new tail, and truncation rewrites force a clean rescan.
 - **Bounded reads**: large JSONL tails are scanned in chunks instead of loading the whole transcript into memory at once.
 - **Cache hygiene**: temp cache files older than 7 days are pruned, and the cache directory is capped at 200 JSON files.
 - **Targeted JSONL scanning**: the fast path extracts only event type, model, and token usage fields instead of fully parsing large message/tool payloads.
@@ -61,7 +61,7 @@ Theme: nord-aurora · Powerline enabled
 - **Includes subagents**: aggregates token usage from the main session plus subagent JSONL files in known per-session `subagents/` folders.
 - **Per-model pricing**: uses input prices (Opus=$5, Sonnet=$3, Haiku=$1 per 1M input tokens) for estimated USD savings.
 - **Turn-level tracking**: groups API calls by user turn, so each dot represents an actual interaction rather than a single API call in a tool-use loop.
-- **Dynamic width inside the summary**: the API-call breakdown trims oldest turns first so newest data is preserved.
+- **Dynamic width for recent turns**: the API-call breakdown trims oldest turns first so newest data is preserved.
 
 ## Performance Notes
 

@@ -440,17 +440,8 @@ function formatMetric(mode, totals, turnState) {
     case 'input':
       return `Uncached:${compactNumber(totals.input)}`;
     default:
-      break;
+      return buildRecent(turnState);
   }
-
-  return [
-    buildRecent(turnState),
-    `Read:${compactNumber(totals.read)}(${Math.round(readRate)}%)`,
-    `Saved:$${saved.toFixed(2)}(${Math.round(savedPct)}%)`,
-    `ROI:${roi.toFixed(1)}x`,
-    `Create:${compactNumber(totals.creation)}`,
-    `In:${compactNumber(totals.input)}`,
-  ].join('  ');
 }
 
 function computeMetrics(transcript) {
@@ -489,7 +480,7 @@ function formatModel(payload) {
 
 const raw = await readStdin();
 const payload = parseJson(raw);
-const mode = process.argv[2] || 'summary';
+const mode = process.argv[2] || 'recent';
 
 if (mode === 'model') {
   const model = formatModel(payload);
