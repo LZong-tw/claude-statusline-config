@@ -2,15 +2,16 @@
 
 Personal [ccstatusline](https://github.com/sirmalloc/ccstatusline) configuration and cache metrics scripts for Claude Code.
 
-The default config is optimized for Windows Terminal + Claude Code: ccstatusline keeps the original 4-line visual layout, but the custom widgets now use one Node renderer with an incremental shared cache instead of `bash`/`jq`/`awk` scripts. That avoids repeated shell startup and repeated full scans of the same live JSONL transcript.
+The default config is optimized for Claude Code on macOS/Linux: ccstatusline keeps the original 4-line visual layout, but the custom widgets use one Node renderer with an incremental shared cache instead of `bash`/`jq`/`awk` scripts. That avoids repeated shell startup and repeated full scans of the same live JSONL transcript.
 
-Inspired by [nnaveenraju/claude-code-status-line](https://github.com/nnaveenraju/claude-code-status-line) — same JSONL metrics idea, but the Windows path now aggregates the expensive work once.
+Inspired by [nnaveenraju/claude-code-status-line](https://github.com/nnaveenraju/claude-code-status-line) — same JSONL metrics idea, but the default path now aggregates the expensive work once.
 
 ## Files
 
 | File | Widget label | What it shows |
 |------|-------------|---------------|
-| `statusline-fast.mjs` | `Sonnet 4.6 1M` / `T8: ...` / cache metrics | Windows-optimized Node renderer for model name, recent turns, and cache metrics |
+| `statusline-fast.mjs` | `Sonnet 4.6 1M` / `T8: ...` / cache metrics | Node renderer for model name, recent turns, and cache metrics |
+| `statusline-cached.sh` | — | Claude Code `statusLine.command` wrapper with per-session cache keys |
 | `ccstatusline-settings.json` | — | 4-line ccstatusline layout using `statusline-fast.mjs` |
 | `scripts/verify-settings.mjs` | — | Guardrail that fails if the default layout stops matching the original 4-line contract |
 | `scripts/verify-statusline-fast.mjs` | — | Guardrail for renderer behavior, including AirClaude model label overrides |
@@ -19,7 +20,7 @@ Inspired by [nnaveenraju/claude-code-status-line](https://github.com/nnaveenraju
 | `cache-read.sh` | `ReadCache: 58.4M (94%)` | Legacy `cache_read_input_tokens` + hit rate widget |
 | `cache-creation.sh` | `CacheCreate: 3.7M` | Legacy `cache_creation_input_tokens` widget |
 | `cache-input.sh` | `Uncached: 534` | Legacy `input_tokens` widget |
-| `cache-savings.sh` | `Saved:$210.47 (84%)` | Legacy USD savings widget |
+| `cache-savings.sh` | `Saved≈$210.47 (84%)` | Legacy USD savings widget |
 | `cache-roi.sh` | `ROI:17.4x` | Legacy `cache_read / cache_creation` ratio widget |
 | `cache-recent.sh` | `T8: ●●●○●●●●  ■■│■│■■■│□│■■│■│■│■` | Legacy last 8 user turns + API call breakdown widget |
 | `hooks/check-ccstatusline.cjs` | — | Optional Claude hook reminder when the global `ccstatusline` package is older than 14 days |
@@ -57,10 +58,11 @@ Theme: nord-aurora · Powerline enabled
 - **Bounded reads**: large JSONL tails are scanned in chunks instead of loading the whole transcript into memory at once.
 - **Cache hygiene**: temp cache files older than 7 days are pruned, and the cache directory is capped at 200 JSON files.
 - **Targeted JSONL scanning**: the fast path extracts only event type, model, and token usage fields instead of fully parsing large message/tool payloads.
-- **No Git Bash requirement on Windows default path**: the default settings use `node "%USERPROFILE%/.claude/statusline-fast.mjs" ...`, so redraws do not pay `bash -> jq -> awk` startup costs.
+- **No shell widget requirement on the default path**: the default settings use `node "$HOME/.claude/statusline-fast.mjs" ...`, so redraws do not pay `bash -> jq -> awk` startup costs.
 - **Session-scoped via `transcript_path`**: reads the active session's JSONL path directly from ccstatusline stdin. It falls back to the matching project slug under `~/.claude/projects/` only when `transcript_path` is missing or stale.
 - **Includes subagents**: aggregates token usage from the main session plus subagent JSONL files in known per-session `subagents/` folders.
-- **Per-model pricing**: uses input prices (Opus=$5, Sonnet=$3, Haiku=$1 per 1M input tokens) for estimated USD savings.
+- **Route-aware pricing override**: `AIRCLAUDE_STATUSLINE_INPUT_PRICE_PER_MILLION` can override the estimated input price for the current route. Without it, the renderer falls back to broad Anthropic-family defaults (Opus=$5, Sonnet/default=$3, Haiku=$1 per 1M input tokens).
+- **Keyed wrapper cache**: `statusline-cached.sh` keys rendered statusline output by `transcript_path`/workspace, so one live session does not reuse another session's statusline cache. If ccstatusline cannot run, it returns blank by default instead of presenting a stale cache as fresh data.
 - **Turn-level tracking**: groups API calls by user turn, so each dot represents an actual interaction rather than a single API call in a tool-use loop.
 - **Dynamic width for recent turns**: the API-call breakdown trims oldest turns first so newest data is preserved.
 
@@ -101,8 +103,10 @@ Headline rule: **measure before optimizing**. On Windows, intuition often points
 
 ### 1. Install scripts
 
-```powershell
-Copy-Item .\statusline-fast.mjs $env:USERPROFILE\.claude\statusline-fast.mjs -Force
+```sh
+mkdir -p ~/.claude
+cp statusline-fast.mjs statusline-cached.sh ~/.claude/
+chmod +x ~/.claude/statusline-fast.mjs ~/.claude/statusline-cached.sh
 ```
 
 The legacy shell widgets are still kept in this repo for reference and non-default setups:
@@ -114,51 +118,57 @@ chmod +x ~/.claude/claude-jsonl.sh ~/.claude/cache-*.sh ~/.claude/model-name.sh
 
 ### 2. ccstatusline settings
 
-```powershell
-New-Item -ItemType Directory -Force $env:USERPROFILE\.config\ccstatusline
-Copy-Item .\ccstatusline-settings.json $env:USERPROFILE\.config\ccstatusline\settings.json -Force
+```sh
+mkdir -p ~/.config/ccstatusline
+cp ccstatusline-settings.json ~/.config/ccstatusline/settings.json
 ```
 
 ### 3. Claude Code statusLine
 
-On Windows, prefer the globally installed ccstatusline shim so status redraws do not invoke `npx` or touch the registry path:
+Use the cache wrapper as the Claude Code `statusLine.command`:
 
 ```json
 {
   "statusLine": {
     "type": "command",
-    "command": "ccstatusline",
+    "command": "/Users/YOU/.claude/statusline-cached.sh",
     "padding": 0
   }
 }
 ```
 
-If the shim is missing, install or refresh it once:
+Prefer a globally installed ccstatusline shim so status redraws do not invoke `npx` or touch the registry path:
 
-```powershell
+```sh
 npm install -g ccstatusline@latest
-where.exe ccstatusline
+command -v ccstatusline
 ```
 
 Or add widgets manually via the ccstatusline TUI:
 
 ```
-node "%USERPROFILE%/.claude/statusline-fast.mjs" model
-node "%USERPROFILE%/.claude/statusline-fast.mjs" recent
-node "%USERPROFILE%/.claude/statusline-fast.mjs" read
-node "%USERPROFILE%/.claude/statusline-fast.mjs" savings
-node "%USERPROFILE%/.claude/statusline-fast.mjs" roi
-node "%USERPROFILE%/.claude/statusline-fast.mjs" creation
-node "%USERPROFILE%/.claude/statusline-fast.mjs" input
+node "$HOME/.claude/statusline-fast.mjs" model
+node "$HOME/.claude/statusline-fast.mjs" recent
+node "$HOME/.claude/statusline-fast.mjs" read
+node "$HOME/.claude/statusline-fast.mjs" savings
+node "$HOME/.claude/statusline-fast.mjs" roi
+node "$HOME/.claude/statusline-fast.mjs" creation
+node "$HOME/.claude/statusline-fast.mjs" input
 ```
 
-Each custom-command widget sets a bounded timeout: `2000 ms` for model name and `3000 ms` for the JSONL-backed metrics. Current Windows measurements are comfortably below that; if they time out, something else is likely starving the machine.
+Each custom-command widget sets a bounded timeout: `2000 ms` for model name and `3000 ms` for the JSONL-backed metrics. Current measurements are comfortably below that; if they time out, something else is likely starving the machine.
 
 Before changing the default layout, run the guard:
 
 ```powershell
 node .\scripts\verify-settings.mjs
 node .\scripts\verify-statusline-fast.mjs
+```
+
+To inspect which transcript the custom metrics are reading:
+
+```sh
+printf '%s' "$CLAUDE_STATUSLINE_PAYLOAD" | node ~/.claude/statusline-fast.mjs source
 ```
 
 ### 4. Optional freshness reminder hook
@@ -198,11 +208,11 @@ The hook is read-only. It checks `npm root -g`, finds the global `ccstatusline/p
 ```
 effective_cost = 0.1 × cache_read + 1.25 × cache_creation + 1.0 × input  (per-model price)
 baseline_cost  = cache_read + cache_creation + input                        (per-model price)
-saved_usd      = baseline_cost − effective_cost
+saved_usd      ≈ baseline_cost − effective_cost
 saved_pct      = (1 − effective_cost / baseline_cost) × 100
 ```
 
-Pricing as of 2026-04-15, per 1M input tokens:
+Set `AIRCLAUDE_STATUSLINE_INPUT_PRICE_PER_MILLION` to make the estimate use the current route's input price. Without that env var, the fallback pricing is:
 
 | Model | Price |
 |-------|-------|

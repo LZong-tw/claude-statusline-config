@@ -57,8 +57,11 @@ for (const command of customCommands) {
   if (!command.includes('statusline-fast.mjs')) {
     fail(`custom command must use statusline-fast.mjs: ${command}`);
   }
+  if (command.includes('%USERPROFILE%')) {
+    fail(`default config must not use Windows-only %USERPROFILE% paths: ${command}`);
+  }
   if (command.includes('bash -c')) {
-    fail(`default Windows config must not use bash -c: ${command}`);
+    fail(`default config must not use bash -c: ${command}`);
   }
 }
 

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -12,7 +14,11 @@ function fail(message) {
 }
 
 function renderModel(payload, env = {}) {
-  return spawnSync(process.execPath, [renderer, 'model'], {
+  return render('model', payload, env);
+}
+
+function render(mode, payload, env = {}) {
+  return spawnSync(process.execPath, [renderer, mode], {
     input: JSON.stringify(payload),
     encoding: 'utf8',
     env: { ...process.env, ...env },
@@ -21,6 +27,19 @@ function renderModel(payload, env = {}) {
 
 function assertModel(label, payload, env, expected) {
   const result = renderModel(payload, env);
+  if (result.status !== 0) {
+    fail(`${label}: renderer exited with ${result.status}\n${result.stderr}`);
+    return;
+  }
+
+  const actual = result.stdout.trim();
+  if (actual !== expected) {
+    fail(`${label}: expected "${expected}", got "${actual}"`);
+  }
+}
+
+function assertMetric(label, mode, payload, env, expected) {
+  const result = render(mode, payload, env);
   if (result.status !== 0) {
     fail(`${label}: renderer exited with ${result.status}\n${result.stderr}`);
     return;
@@ -45,6 +64,48 @@ assertModel(
   { AIRCLAUDE_STATUSLINE_LABEL: '' },
   'Sonnet 4.6 1M',
 );
+
+const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'statusline-fast-fixture-'));
+const transcript = path.join(fixtureDir, 'session.jsonl');
+
+try {
+  fs.writeFileSync(
+    transcript,
+    [
+      JSON.stringify({ type: 'user' }),
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          model: 'example-cheap-model',
+          usage: {
+            cache_read_input_tokens: 1_000_000,
+            cache_creation_input_tokens: 0,
+            input_tokens: 0,
+          },
+        },
+      }),
+      '',
+    ].join('\n'),
+  );
+
+  assertMetric(
+    'statusline pricing can be overridden by route metadata',
+    'savings',
+    { transcript_path: transcript },
+    { AIRCLAUDE_STATUSLINE_INPUT_PRICE_PER_MILLION: '0.28' },
+    'Saved≈$0.25 (90%)',
+  );
+
+  assertMetric(
+    'statusline source mode reports the resolved transcript',
+    'source',
+    { transcript_path: transcript },
+    {},
+    `Source:${transcript} files:1`,
+  );
+} finally {
+  fs.rmSync(fixtureDir, { recursive: true, force: true });
+}
 
 if (process.exitCode) process.exit(process.exitCode);
 console.log('statusline-fast guard ok');

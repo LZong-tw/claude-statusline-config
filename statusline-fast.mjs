@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const CACHE_VERSION = 6;
+const CACHE_VERSION = 7;
 const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const CACHE_MAX_FILES = 200;
 const READ_CHUNK_BYTES = 1024 * 1024;
@@ -14,6 +14,18 @@ const MODEL_RE = /"model"\s*:\s*"([^"]*)"/;
 const CACHE_READ_RE = /"cache_read_input_tokens"\s*:\s*(\d+)/;
 const CACHE_CREATION_RE = /"cache_creation_input_tokens"\s*:\s*(\d+)/;
 const INPUT_RE = /"input_tokens"\s*:\s*(\d+)/;
+const ENV_PRICE_OVERRIDE = readPositiveNumberEnv([
+  'AIRCLAUDE_STATUSLINE_INPUT_PRICE_PER_MILLION',
+  'CLAUDE_STATUSLINE_INPUT_PRICE_PER_MILLION',
+]);
+const ENV_PRICE_MAP = readPriceMapEnv([
+  'AIRCLAUDE_STATUSLINE_PRICE_MAP_JSON',
+  'CLAUDE_STATUSLINE_PRICE_MAP_JSON',
+]);
+const PRICE_CACHE_KEY = JSON.stringify({
+  override: ENV_PRICE_OVERRIDE,
+  map: ENV_PRICE_MAP,
+});
 
 function readStdin() {
   return new Promise((resolve) => {
@@ -143,7 +155,7 @@ function pruneCacheDir() {
 function readCache(transcript) {
   try {
     const cache = JSON.parse(fs.readFileSync(cachePathFor(transcript), 'utf8'));
-    return cache.version === CACHE_VERSION ? cache : null;
+    return cache.version === CACHE_VERSION && cache.priceCacheKey === PRICE_CACHE_KEY ? cache : null;
   } catch {
     return null;
   }
@@ -155,7 +167,7 @@ function writeCache(transcript, cache) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     pruneCacheDir();
     const tmp = `${file}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify({ version: CACHE_VERSION, ...cache }));
+    fs.writeFileSync(tmp, JSON.stringify({ version: CACHE_VERSION, priceCacheKey: PRICE_CACHE_KEY, ...cache }));
     fs.renameSync(tmp, file);
   } catch {
     // Cache is best-effort; statusline output should never fail because of it.
@@ -168,8 +180,39 @@ function compactNumber(value) {
   return String(Math.round(value));
 }
 
+function readPositiveNumberEnv(names) {
+  for (const name of names) {
+    const value = Number(process.env[name]);
+    if (Number.isFinite(value) && value > 0) return value;
+  }
+  return null;
+}
+
+function readPriceMapEnv(names) {
+  for (const name of names) {
+    const raw = process.env[name];
+    if (!raw) continue;
+    try {
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
+      return Object.entries(parsed)
+        .map(([model, price]) => [String(model).toLowerCase(), Number(price)])
+        .filter(([, price]) => Number.isFinite(price) && price > 0);
+    } catch {
+      // Ignore malformed optional pricing metadata.
+    }
+  }
+  return [];
+}
+
 function priceForModel(model) {
+  if (ENV_PRICE_OVERRIDE !== null) return ENV_PRICE_OVERRIDE;
+
   const lower = String(model || '').toLowerCase();
+  for (const [needle, price] of ENV_PRICE_MAP) {
+    if (needle && lower.includes(needle)) return price;
+  }
+
   if (lower.includes('opus')) return 5;
   if (lower.includes('haiku')) return 1;
   return 3;
@@ -432,7 +475,7 @@ function formatMetric(mode, totals, turnState) {
     case 'read':
       return `ReadCache:${compactNumber(totals.read)} (${Math.round(readRate)}%)`;
     case 'savings':
-      return `Saved:$${saved.toFixed(2)} (${Math.round(savedPct)}%)`;
+      return `Saved≈$${saved.toFixed(2)} (${Math.round(savedPct)}%)`;
     case 'roi':
       return `ROI:${roi.toFixed(1)}x`;
     case 'creation':
@@ -494,6 +537,12 @@ if (mode === 'model') {
 
 const transcript = resolveTranscript(payload);
 if (!transcript) process.exit(0);
+
+if (mode === 'source') {
+  const files = [transcript, ...subagentFilesFor(transcript)];
+  process.stdout.write(`Source:${transcript} files:${files.length}\n`);
+  process.exit(0);
+}
 
 const { totals, turnState } = computeMetrics(transcript);
 process.stdout.write(`${formatMetric(mode, totals, turnState)}\n`);
