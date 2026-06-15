@@ -1,11 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+if [[ -z "${HOME:-}" ]]; then
+  if [[ "${script_dir##*/}" == ".claude" ]]; then
+    HOME="$(dirname -- "$script_dir")"
+  else
+    HOME="$(CDPATH= cd -- "$script_dir/.." && pwd -P)"
+  fi
+  export HOME
+fi
+
 cache_dir="${CLAUDE_STATUSLINE_CACHE_DIR:-$HOME/.claude/cache/statusline}"
 ttl_seconds="${CLAUDE_STATUSLINE_TTL_SECONDS:-5}"
+fast_renderer="${CLAUDE_STATUSLINE_FAST_RENDERER:-$script_dir/statusline-fast.mjs}"
 
 payload="$(cat)"
-mkdir -p "$cache_dir"
+mkdir -p "$cache_dir" 2>/dev/null || true
 
 cache_key="$(
   STATUSLINE_PAYLOAD="$payload" node - <<'NODE'
@@ -24,10 +35,9 @@ NODE
 )"
 
 cache_file="$cache_dir/statusline.$cache_key.txt"
-tmp_file="$cache_file.$$"
 
 now="$(date +%s)"
-if [[ -f "$cache_file" ]]; then
+if [[ -f "$cache_file" && -s "$cache_file" ]]; then
   modified="$(stat -f %m "$cache_file" 2>/dev/null || stat -c %Y "$cache_file" 2>/dev/null || echo 0)"
   if [[ "$modified" =~ ^[0-9]+$ ]] && (( now - modified < ttl_seconds )); then
     cat "$cache_file"
@@ -66,13 +76,49 @@ run_ccstatusline() {
   return 127
 }
 
+render_fast() {
+  local mode="$1"
+  if [[ -f "$fast_renderer" ]] && command -v node >/dev/null 2>&1; then
+    printf '%s' "$payload" | node "$fast_renderer" "$mode" 2>/dev/null || true
+  fi
+}
+
+render_fallback() {
+  local model recent read savings roi creation input
+  model="$(render_fast model)"
+  recent="$(render_fast recent)"
+  read="$(render_fast read)"
+  savings="$(render_fast savings)"
+  roi="$(render_fast roi)"
+  creation="$(render_fast creation)"
+  input="$(render_fast input)"
+
+  {
+    [[ -n "$model" ]] && printf '%s\n' "$model"
+    [[ -n "$recent" ]] && printf '%s\n' "$recent"
+    printf '%s\n' "$read $savings $roi $creation $input" | sed 's/[[:space:]]*$//'
+  } | sed '/^$/d'
+}
+
+tmp_file="$(mktemp "${TMPDIR:-/tmp}/statusline-cached.XXXXXX")"
+
 if run_ccstatusline >"$tmp_file" 2>/dev/null && [[ -s "$tmp_file" ]]; then
-  mv "$tmp_file" "$cache_file"
-  cat "$cache_file"
+  if mkdir -p "$cache_dir" 2>/dev/null && mv "$tmp_file" "$cache_file" 2>/dev/null; then
+    cat "$cache_file"
+  else
+    cat "$tmp_file"
+    rm -f "$tmp_file"
+  fi
   exit 0
 fi
 
 rm -f "$tmp_file"
-if [[ "${CLAUDE_STATUSLINE_STALE_ON_ERROR:-}" == "1" && -f "$cache_file" ]]; then
+fallback="$(render_fallback)"
+if [[ -n "$fallback" ]]; then
+  printf '%s\n' "$fallback"
+  exit 0
+fi
+
+if [[ "${CLAUDE_STATUSLINE_STALE_ON_ERROR:-}" == "1" && -f "$cache_file" && -s "$cache_file" ]]; then
   cat "$cache_file"
 fi

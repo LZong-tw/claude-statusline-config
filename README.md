@@ -62,7 +62,7 @@ Theme: nord-aurora · Powerline enabled
 - **Session-scoped via `transcript_path`**: reads the active session's JSONL path directly from ccstatusline stdin. It falls back to the matching project slug under `~/.claude/projects/` only when `transcript_path` is missing or stale.
 - **Includes subagents**: aggregates token usage from the main session plus subagent JSONL files in known per-session `subagents/` folders.
 - **Route-aware pricing override**: `AIRCLAUDE_STATUSLINE_INPUT_PRICE_PER_MILLION` can override the estimated input price for the current route. Without it, the renderer falls back to broad Anthropic-family defaults (Opus=$5, Sonnet/default=$3, Haiku=$1 per 1M input tokens).
-- **Keyed wrapper cache**: `statusline-cached.sh` keys rendered statusline output by `transcript_path`/workspace, so one live session does not reuse another session's statusline cache. If ccstatusline cannot run, it returns blank by default instead of presenting a stale cache as fresh data.
+- **Keyed wrapper cache**: `statusline-cached.sh` keys rendered statusline output by `transcript_path`/workspace, so one live session does not reuse another session's statusline cache. Empty cache entries are ignored, and if ccstatusline cannot run the wrapper falls back to the local `statusline-fast.mjs` renderer instead of returning a blank statusline.
 - **Turn-level tracking**: groups API calls by user turn, so each dot represents an actual interaction rather than a single API call in a tool-use loop.
 - **Dynamic width for recent turns**: the API-call breakdown trims oldest turns first so newest data is preserved.
 
@@ -160,9 +160,10 @@ Each custom-command widget sets a bounded timeout: `2000 ms` for model name and 
 
 Before changing the default layout, run the guard:
 
-```powershell
-node .\scripts\verify-settings.mjs
-node .\scripts\verify-statusline-fast.mjs
+```sh
+node ./scripts/verify-settings.mjs
+node ./scripts/verify-statusline-fast.mjs
+bash ./scripts/verify-statusline-cached.sh
 ```
 
 To inspect which transcript the custom metrics are reading:

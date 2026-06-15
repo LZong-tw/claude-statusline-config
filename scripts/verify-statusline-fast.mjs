@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const renderer = path.join(root, 'statusline-fast.mjs');
+const cachedWrapper = path.join(root, 'statusline-cached.sh');
 
 function fail(message) {
   console.error(message);
@@ -51,6 +52,53 @@ function assertMetric(label, mode, payload, env, expected) {
   }
 }
 
+function assertCachedWrapperSurvivesScrubbedHome() {
+  const fixtureHome = fs.mkdtempSync(path.join(os.tmpdir(), 'statusline-home-'));
+  const fixtureClaudeDir = path.join(fixtureHome, '.claude');
+  const fixtureBin = path.join(fixtureHome, 'fake-ccstatusline.sh');
+  const fixtureWrapper = path.join(fixtureClaudeDir, 'statusline-cached.sh');
+
+  try {
+    fs.mkdirSync(fixtureClaudeDir, { recursive: true });
+    fs.copyFileSync(cachedWrapper, fixtureWrapper);
+    fs.chmodSync(fixtureWrapper, 0o755);
+    fs.writeFileSync(
+      fixtureBin,
+      [
+        '#!/usr/bin/env bash',
+        'set -euo pipefail',
+        '[[ -n "${HOME:-}" ]]',
+        'cat >/dev/null',
+        'printf "ok:%s\\n" "$HOME"',
+        '',
+      ].join('\n'),
+      { mode: 0o755 },
+    );
+
+    const result = spawnSync(fixtureWrapper, {
+      input: JSON.stringify({ cwd: root }),
+      encoding: 'utf8',
+      env: {
+        PATH: process.env.PATH,
+        CCSTATUSLINE_BIN: fixtureBin,
+      },
+    });
+
+    if (result.status !== 0) {
+      fail(`cached wrapper without HOME exited with ${result.status}\n${result.stderr}`);
+      return;
+    }
+
+    const actual = result.stdout.trim();
+    const expected = `ok:${fs.realpathSync(fixtureHome)}`;
+    if (actual !== expected) {
+      fail(`cached wrapper without HOME: expected "${expected}", got "${actual}"`);
+    }
+  } finally {
+    fs.rmSync(fixtureHome, { recursive: true, force: true });
+  }
+}
+
 assertModel(
   'AirClaude statusline label overrides Claude payload model name',
   { model: { display_name: 'Claude Fable 5' } },
@@ -64,6 +112,8 @@ assertModel(
   { AIRCLAUDE_STATUSLINE_LABEL: '' },
   'Sonnet 4.6 1M',
 );
+
+assertCachedWrapperSurvivesScrubbedHome();
 
 const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'statusline-fast-fixture-'));
 const transcript = path.join(fixtureDir, 'session.jsonl');
