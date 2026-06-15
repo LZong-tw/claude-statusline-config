@@ -470,7 +470,11 @@ function computeMetrics(transcript) {
 }
 
 function formatModel(payload) {
-  let name = payload.model?.display_name || payload.model?.displayName || payload.model || '';
+  let name = process.env.AIRCLAUDE_STATUSLINE_LABEL
+    || payload.model?.display_name
+    || payload.model?.displayName
+    || payload.model
+    || '';
   if (typeof name !== 'string') return '';
   name = name.replace(/^Claude\s+/, '');
   name = name.replace(/ \((\d+[KM]) context\)/, ' $1');

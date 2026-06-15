@@ -13,6 +13,7 @@ Inspired by [nnaveenraju/claude-code-status-line](https://github.com/nnaveenraju
 | `statusline-fast.mjs` | `Sonnet 4.6 1M` / `T8: ...` / cache metrics | Windows-optimized Node renderer for model name, recent turns, and cache metrics |
 | `ccstatusline-settings.json` | — | 4-line ccstatusline layout using `statusline-fast.mjs` |
 | `scripts/verify-settings.mjs` | — | Guardrail that fails if the default layout stops matching the original 4-line contract |
+| `scripts/verify-statusline-fast.mjs` | — | Guardrail for renderer behavior, including AirClaude model label overrides |
 | `claude-jsonl.sh` | — | Legacy helper: finds current project's session JSONL from stdin |
 | `model-name.sh` | `Sonnet 4.6 1M` | Legacy model name widget |
 | `cache-read.sh` | `ReadCache: 58.4M (94%)` | Legacy `cache_read_input_tokens` + hit rate widget |
@@ -157,6 +158,7 @@ Before changing the default layout, run the guard:
 
 ```powershell
 node .\scripts\verify-settings.mjs
+node .\scripts\verify-statusline-fast.mjs
 ```
 
 ### 4. Optional freshness reminder hook
