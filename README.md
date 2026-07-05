@@ -13,6 +13,7 @@ Inspired by [nnaveenraju/claude-code-status-line](https://github.com/nnaveenraju
 | `statusline-fast.mjs` | `Sonnet 4.6 1M` / `T8: ...` / cache metrics | Node renderer for model name, recent turns, and cache metrics |
 | `statusline-cached.sh` | — | Claude Code `statusLine.command` wrapper with per-session cache keys |
 | `ccstatusline-settings.json` | — | 4-line ccstatusline layout using `statusline-fast.mjs` |
+| `ccstatusline-settings.windows.json` | — | Same layout with `%USERPROFILE%` paths so `cmd.exe`-spawned widgets work on Windows (see [Windows](#windows)) |
 | `scripts/verify-settings.mjs` | — | Guardrail that fails if the default layout stops matching the original 4-line contract |
 | `scripts/verify-statusline-fast.mjs` | — | Guardrail for renderer behavior, including AirClaude model label overrides |
 | `claude-jsonl.sh` | — | Legacy helper: finds current project's session JSONL from stdin |
@@ -123,6 +124,8 @@ mkdir -p ~/.config/ccstatusline
 cp ccstatusline-settings.json ~/.config/ccstatusline/settings.json
 ```
 
+On Windows, use `ccstatusline-settings.windows.json` instead — see [Windows](#windows) for why.
+
 ### 3. Claude Code statusLine
 
 Use the cache wrapper as the Claude Code `statusLine.command`:
@@ -203,6 +206,35 @@ Then add it to a Claude Code `SessionStart` hook. Example:
 ```
 
 The hook is read-only. It checks `npm root -g`, finds the global `ccstatusline/package.json`, and emits an `additionalContext` reminder when the installed package timestamp is at least 14 days old.
+
+## Windows
+
+Claude Code runs `statusLine.command` through Git Bash on Windows (or PowerShell when Git Bash is absent) and pipes the JSON payload on stdin. Two Windows-specific details matter.
+
+**Use the `%USERPROFILE%` settings variant.** ccstatusline launches each custom-command widget through the platform shell, which is `cmd.exe` on Windows (Node's `child_process` shell is `ComSpec`). `cmd.exe` does not expand the bash-style `$HOME`, so the default `ccstatusline-settings.json` renders every custom widget as `[Exit: 1]` — and it fails the same way even when ccstatusline itself is launched from Git Bash, because the child shell is still `cmd.exe`. Install `ccstatusline-settings.windows.json` instead. It is identical to the default layout but uses `%USERPROFILE%` (expanded by `cmd.exe`, no hard-coded username) with forward slashes (accepted by Node):
+
+```powershell
+mkdir "$env:USERPROFILE\.config\ccstatusline" -Force | Out-Null
+copy ccstatusline-settings.windows.json "$env:USERPROFILE\.config\ccstatusline\settings.json"
+```
+
+**Quote the wrapper path in `statusLine.command`.** Git Bash word-splits an unquoted `~`/`$HOME` when the Windows home directory contains a space (e.g. `C:\Users\First Last`), so the bare `~/.claude/statusline-cached.sh` form breaks with `Is a directory`. Quote it, and invoke it through `bash` so the execute bit is irrelevant:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "bash \"$HOME/.claude/statusline-cached.sh\"",
+    "padding": 0
+  }
+}
+```
+
+Git Bash supplies the POSIX tools the wrapper needs (`stat`, `date`, `mktemp`, `find`, `sed`). Node and the global `ccstatusline` must be on the `PATH` that Git Bash inherits — verify with:
+
+```powershell
+bash -lc 'command -v node ccstatusline'
+```
 
 ## How savings are calculated
 
