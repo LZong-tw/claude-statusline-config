@@ -487,7 +487,31 @@ function formatMetric(mode, totals, turnState) {
   }
 }
 
+const MEM_CACHE_FILE = path.join(os.tmpdir(), 'ccstatusline-fast-memcache.json');
+
+function readMemCache(transcript) {
+  try {
+    const stat = fs.statSync(MEM_CACHE_FILE);
+    if (Date.now() - stat.mtimeMs < 2000) {
+      const data = JSON.parse(fs.readFileSync(MEM_CACHE_FILE, 'utf8'));
+      if (data.transcript === transcript) {
+        return data.result;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+function writeMemCache(transcript, result) {
+  try {
+    fs.writeFileSync(MEM_CACHE_FILE, JSON.stringify({ transcript, result }));
+  } catch {}
+}
+
 function computeMetrics(transcript) {
+  const cached = readMemCache(transcript);
+  if (cached) return cached;
+
   const files = [transcript, ...subagentFilesFor(transcript)];
   const previous = readCache(transcript);
   const previousFiles = previous?.files || {};
@@ -509,7 +533,9 @@ function computeMetrics(transcript) {
 
   const turnState = nextFiles[transcript]?.turnState;
   writeCache(transcript, { files: nextFiles });
-  return { totals, turnState };
+  const result = { totals, turnState };
+  writeMemCache(transcript, result);
+  return result;
 }
 
 function formatModel(payload) {
