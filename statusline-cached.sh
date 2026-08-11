@@ -16,6 +16,13 @@ ttl_seconds="${CLAUDE_STATUSLINE_TTL_SECONDS:-5}"
 fast_renderer="${CLAUDE_STATUSLINE_FAST_RENDERER:-$script_dir/statusline-fast.mjs}"
 
 payload="$(cat)"
+statusline_payload="$payload"
+if [[ -f "$fast_renderer" ]] && command -v node >/dev/null 2>&1; then
+  enriched_payload="$(printf '%s' "$payload" | node "$fast_renderer" enrich 2>/dev/null || true)"
+  if [[ -n "$enriched_payload" ]] && printf '%s' "$enriched_payload" | node -e 'JSON.parse(require("node:fs").readFileSync(0, "utf8"))' >/dev/null 2>&1; then
+    statusline_payload="$enriched_payload"
+  fi
+fi
 mkdir -p "$cache_dir" 2>/dev/null || true
 
 cache_key="$(
@@ -47,24 +54,24 @@ fi
 
 run_ccstatusline() {
   if [[ -n "${CCSTATUSLINE_BIN:-}" ]]; then
-    printf '%s' "$payload" | "$CCSTATUSLINE_BIN"
+    printf '%s' "$statusline_payload" | "$CCSTATUSLINE_BIN"
     return
   fi
 
   if command -v ccstatusline >/dev/null 2>&1; then
-    printf '%s' "$payload" | ccstatusline
+    printf '%s' "$statusline_payload" | ccstatusline
     return
   fi
 
   local npx_cache_bin=""
   npx_cache_bin="$(find "${NPM_CONFIG_CACHE:-$HOME/.npm}/_npx" -path '*/node_modules/.bin/ccstatusline' -print -quit 2>/dev/null || true)"
   if [[ -n "$npx_cache_bin" && -x "$npx_cache_bin" ]]; then
-    printf '%s' "$payload" | "$npx_cache_bin"
+    printf '%s' "$statusline_payload" | "$npx_cache_bin"
     return
   fi
 
   if command -v npx >/dev/null 2>&1; then
-    printf '%s' "$payload" | env \
+    printf '%s' "$statusline_payload" | env \
       npm_config_prefer_offline=true \
       npm_config_offline=true \
       npm_config_fetch_timeout=1000 \

@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const CACHE_VERSION = 7;
+const CACHE_VERSION = 8;
+const MEM_CACHE_VERSION = 2;
 const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const CACHE_MAX_FILES = 200;
 const READ_CHUNK_BYTES = 1024 * 1024;
@@ -14,6 +15,7 @@ const MODEL_RE = /"model"\s*:\s*"([^"]*)"/;
 const CACHE_READ_RE = /"cache_read_input_tokens"\s*:\s*(\d+)/;
 const CACHE_CREATION_RE = /"cache_creation_input_tokens"\s*:\s*(\d+)/;
 const INPUT_RE = /"input_tokens"\s*:\s*(\d+)/;
+const OUTPUT_RE = /"output_tokens"\s*:\s*(\d+)/;
 const ENV_PRICE_OVERRIDE = readPositiveNumberEnv([
   'AIRCLAUDE_STATUSLINE_INPUT_PRICE_PER_MILLION',
   'CLAUDE_STATUSLINE_INPUT_PRICE_PER_MILLION',
@@ -196,8 +198,8 @@ function readPriceMapEnv(names) {
       const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
       return Object.entries(parsed)
-        .map(([model, price]) => [String(model).toLowerCase(), Number(price)])
-        .filter(([, price]) => Number.isFinite(price) && price > 0);
+        .map(([model, value]) => [String(model).toLowerCase(), normalizePricing(value)])
+        .filter(([, pricing]) => pricing !== null);
     } catch {
       // Ignore malformed optional pricing metadata.
     }
@@ -205,21 +207,42 @@ function readPriceMapEnv(names) {
   return [];
 }
 
-function priceForModel(model) {
-  if (ENV_PRICE_OVERRIDE !== null) return ENV_PRICE_OVERRIDE;
+function normalizePricing(value, known = true) {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value > 0 ? { input: value, known } : null;
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+
+  const input = Number(value.input ?? value.inputCacheMiss);
+  if (!Number.isFinite(input) || input <= 0) return null;
+
+  const pricing = { input, known };
+  for (const key of ['inputCacheHit', 'inputCacheMiss', 'output']) {
+    const number = Number(value[key]);
+    if (Number.isFinite(number) && number > 0) pricing[key] = number;
+  }
+  return pricing;
+}
+
+function pricingForModel(model) {
+  if (ENV_PRICE_OVERRIDE !== null) return normalizePricing(ENV_PRICE_OVERRIDE);
 
   const lower = String(model || '').toLowerCase();
-  for (const [needle, price] of ENV_PRICE_MAP) {
-    if (needle && lower.includes(needle)) return price;
+  for (const [needle, pricing] of ENV_PRICE_MAP) {
+    if (needle && lower.includes(needle)) return pricing;
   }
 
-  if (lower.includes('opus')) return 5;
-  if (lower.includes('haiku')) return 1;
-  return 3;
+  if (lower.includes('opus')) return normalizePricing(5, false);
+  if (lower.includes('haiku')) return normalizePricing(1, false);
+  return normalizePricing(3, false);
+}
+
+function priceForModel(model) {
+  return pricingForModel(model).input;
 }
 
 function emptyTotals() {
-  return { read: 0, creation: 0, input: 0, baseline: 0, effective: 0 };
+  return { read: 0, creation: 0, input: 0, baseline: 0, effective: 0, cost: 0, costKnown: true };
 }
 
 function emptyTurnState() {
@@ -297,6 +320,7 @@ function consumeAssistantUsage(event, totals) {
   const read = Number(usage.cache_read_input_tokens || 0);
   const creation = Number(usage.cache_creation_input_tokens || 0);
   const input = Number(usage.input_tokens || 0);
+  const output = Number(usage.output_tokens || 0);
   const price = priceForModel(event.message?.model);
 
   totals.read += read;
@@ -304,6 +328,16 @@ function consumeAssistantUsage(event, totals) {
   totals.input += input;
   totals.baseline += ((read + creation + input) * price) / 1_000_000;
   totals.effective += ((0.1 * read + 1.25 * creation + input) * price) / 1_000_000;
+
+  const pricing = pricingForModel(event.message?.model);
+  const cost = pricing.known && Number.isFinite(pricing.output)
+    ? (input * pricing.input
+      + read * (pricing.inputCacheHit ?? pricing.input)
+      + creation * (pricing.inputCacheMiss ?? pricing.input)
+      + output * pricing.output) / 1_000_000
+    : null;
+  if (cost === null) totals.costKnown = false;
+  else if (totals.costKnown) totals.cost += cost;
 }
 
 function numberFromLine(line, pattern) {
@@ -341,8 +375,11 @@ function eventFromLine(line) {
         cache_read_input_tokens: numberFromLine(line, CACHE_READ_RE),
         cache_creation_input_tokens: numberFromLine(line, CACHE_CREATION_RE),
         input_tokens: numberFromLine(line, INPUT_RE),
+        output_tokens: numberFromLine(line, OUTPUT_RE),
       },
     },
+    isSidechain: /"isSidechain"\s*:\s*true/.test(line),
+    isApiErrorMessage: /"isApiErrorMessage"\s*:\s*true/.test(line),
   };
 }
 
@@ -416,10 +453,14 @@ function updateFileState(file, previous, trackTurns) {
   const turnState = trackTurns
     ? incremental ? normalizeTurnState(previous.turnState) : emptyTurnState()
     : null;
+  let latestUsage = trackTurns && incremental ? previous.latestUsage ?? null : null;
 
   const consumed = parseFileTail(file, offset, stat.size, (event) => {
     consumeAssistantUsage(event, totals);
     if (trackTurns) consumeMainTurn(event, turnState);
+    if (trackTurns && event.type === 'assistant' && !event.isSidechain && !event.isApiErrorMessage) {
+      latestUsage = event.message;
+    }
   });
 
   return {
@@ -428,7 +469,7 @@ function updateFileState(file, previous, trackTurns) {
     offset: offset + consumed,
     size: stat.size,
     totals,
-    ...(trackTurns ? { turnState } : {}),
+    ...(trackTurns ? { turnState, latestUsage } : {}),
   };
 }
 
@@ -494,7 +535,9 @@ function readMemCache(transcript) {
     const stat = fs.statSync(MEM_CACHE_FILE);
     if (Date.now() - stat.mtimeMs < 2000) {
       const data = JSON.parse(fs.readFileSync(MEM_CACHE_FILE, 'utf8'));
-      if (data.transcript === transcript) {
+      if (data.version === MEM_CACHE_VERSION
+        && data.priceCacheKey === PRICE_CACHE_KEY
+        && data.transcript === transcript) {
         return data.result;
       }
     }
@@ -504,7 +547,12 @@ function readMemCache(transcript) {
 
 function writeMemCache(transcript, result) {
   try {
-    fs.writeFileSync(MEM_CACHE_FILE, JSON.stringify({ transcript, result }));
+    fs.writeFileSync(MEM_CACHE_FILE, JSON.stringify({
+      version: MEM_CACHE_VERSION,
+      priceCacheKey: PRICE_CACHE_KEY,
+      transcript,
+      result,
+    }));
   } catch {}
 }
 
@@ -529,20 +577,103 @@ function computeMetrics(transcript) {
     totals.input += fileTotals.input;
     totals.baseline += fileTotals.baseline;
     totals.effective += fileTotals.effective;
+    totals.cost += fileTotals.cost;
+    totals.costKnown = totals.costKnown && fileTotals.costKnown !== false;
   }
 
   const turnState = nextFiles[transcript]?.turnState;
+  const mainState = nextFiles[transcript];
   writeCache(transcript, { files: nextFiles });
-  const result = { totals, turnState };
+  const result = {
+    totals,
+    turnState,
+    mainTotals: normalizeTotals(mainState?.totals),
+    latestUsage: mainState?.latestUsage ?? null,
+  };
   writeMemCache(transcript, result);
   return result;
 }
 
+function positiveNumber(value) {
+  return Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : null;
+}
+
+function enrichPayload(payload, transcript) {
+  const metrics = computeMetrics(transcript);
+  const usage = metrics.latestUsage?.usage;
+  if (!usage || typeof usage !== 'object') return payload;
+
+  const next = { ...payload };
+  const existingContext = payload.context_window && typeof payload.context_window === 'object'
+    ? payload.context_window
+    : {};
+  const contextWindowSize = positiveNumber(
+    existingContext.context_window_size ?? process.env.AIRCLAUDE_STATUSLINE_CONTEXT_WINDOW,
+  );
+  const currentUsage = {
+    input_tokens: positiveNumber(usage.input_tokens) ?? 0,
+    output_tokens: positiveNumber(usage.output_tokens) ?? 0,
+    cache_creation_input_tokens: positiveNumber(usage.cache_creation_input_tokens) ?? 0,
+    cache_read_input_tokens: positiveNumber(usage.cache_read_input_tokens) ?? 0,
+  };
+  const currentUsageTotal = Object.values(currentUsage).reduce((sum, value) => sum + value, 0);
+  const existingUsage = existingContext.current_usage;
+  const existingUsageTotal = typeof existingUsage === 'number'
+    ? existingUsage
+    : existingUsage && typeof existingUsage === 'object'
+      ? Object.values(existingUsage).reduce((sum, value) => sum + (positiveNumber(value) ?? 0), 0)
+      : 0;
+
+  if (contextWindowSize !== null && currentUsageTotal > 0 && existingUsageTotal === 0) {
+    next.context_window = {
+      ...existingContext,
+      context_window_size: contextWindowSize,
+      current_usage: currentUsage,
+    };
+  }
+
+  const existingCost = payload.cost && typeof payload.cost === 'object' ? payload.cost : {};
+  if (metrics.mainTotals.costKnown && !Number.isFinite(Number(existingCost.total_cost_usd))) {
+    next.cost = { ...existingCost, total_cost_usd: metrics.mainTotals.cost };
+  }
+  return next;
+}
+
+function payloadModelId(payload) {
+  const model = payload?.model;
+  if (typeof model === 'string') return model;
+  return model?.id
+    || model?.model
+    || model?.name
+    || model?.display_name
+    || model?.displayName
+    || '';
+}
+
+function decodeCcrCompatibilityModel(model) {
+  const match = String(model || '').trim().match(/^claude-ccr-h([0-9a-f]+)(?:\[1m\])?$/i);
+  if (!match || match[1].length % 2 !== 0) return '';
+  const decoded = Buffer.from(match[1], 'hex').toString('utf8');
+  return /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)+$/.test(decoded) ? decoded : '';
+}
+
+function airclaudeModeFromCacheDir() {
+  const cacheDir = String(process.env.CLAUDE_STATUSLINE_CACHE_DIR || '');
+  const match = cacheDir.match(/[\\/]+airclaude[\\/]+[^\\/]+[\\/]+([^\\/]+)$/);
+  return match?.[1] || '';
+}
+
 function formatModel(payload) {
+  const payloadId = payloadModelId(payload);
+  const compatibilityModel = decodeCcrCompatibilityModel(payloadId);
+  const cachedMode = airclaudeModeFromCacheDir();
   let name = process.env.AIRCLAUDE_STATUSLINE_LABEL
+    || (compatibilityModel && cachedMode
+      ? `airclaude ${cachedMode} ${compatibilityModel.slice(compatibilityModel.lastIndexOf('/') + 1)}`
+      : '')
     || payload.model?.display_name
     || payload.model?.displayName
-    || payload.model
+    || payloadId
     || '';
   if (typeof name !== 'string') return '';
   name = name.replace(/^Claude\s+/, '');
@@ -563,6 +694,11 @@ if (mode === 'model') {
 
 const transcript = resolveTranscript(payload);
 if (!transcript) process.exit(0);
+
+if (mode === 'enrich') {
+  process.stdout.write(`${JSON.stringify(enrichPayload(payload, transcript))}\n`);
+  process.exit(0);
+}
 
 if (mode === 'source') {
   const files = [transcript, ...subagentFilesFor(transcript)];
