@@ -132,6 +132,7 @@ assertCachedWrapperSurvivesScrubbedHome();
 const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'statusline-fast-fixture-'));
 const transcript = path.join(fixtureDir, 'session.jsonl');
 const enrichTranscript = path.join(fixtureDir, 'enrich-session.jsonl');
+const modelTranscript = path.join(fixtureDir, 'model-session.jsonl');
 
 try {
   fs.writeFileSync(
@@ -171,6 +172,21 @@ try {
       }),
       '',
     ].join('\n'),
+  );
+
+  fs.writeFileSync(
+    modelTranscript,
+    `${JSON.stringify({
+      type: 'assistant',
+      message: { model: 'claude-opus-5', usage: { input_tokens: 1 } },
+    })}\n`,
+  );
+
+  assertModel(
+    'latest main transcript model wins after Claude Code /model changes',
+    { transcript_path: modelTranscript, model: { display_name: 'Claude Sonnet 5' } },
+    { AIRCLAUDE_STATUSLINE_LABEL: 'airclaude web claude-sonnet-5', CLAUDE_STATUSLINE_CACHE_DIR: '/tmp/.claude/cache/airclaude/oneportal-lowcost/web' },
+    'airclaude web claude-opus-5',
   );
 
   const enriched = render('enrich', { transcript_path: enrichTranscript }, {

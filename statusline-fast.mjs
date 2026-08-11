@@ -663,14 +663,17 @@ function airclaudeModeFromCacheDir() {
   return match?.[1] || '';
 }
 
-function formatModel(payload) {
+function formatModel(payload, transcriptModel = '') {
   const payloadId = payloadModelId(payload);
-  const compatibilityModel = decodeCcrCompatibilityModel(payloadId);
+  const selectedId = transcriptModel || payloadId;
+  const compatibilityModel = decodeCcrCompatibilityModel(selectedId);
   const cachedMode = airclaudeModeFromCacheDir();
-  let name = process.env.AIRCLAUDE_STATUSLINE_LABEL
-    || (compatibilityModel && cachedMode
-      ? `airclaude ${cachedMode} ${compatibilityModel.slice(compatibilityModel.lastIndexOf('/') + 1)}`
-      : '')
+  const selectedName = compatibilityModel
+    ? compatibilityModel.slice(compatibilityModel.lastIndexOf('/') + 1)
+    : String(selectedId).replace(/\[1m\]$/i, '');
+  let name = cachedMode && selectedName
+    ? `airclaude ${cachedMode} ${selectedName}`
+    : process.env.AIRCLAUDE_STATUSLINE_LABEL
     || payload.model?.display_name
     || payload.model?.displayName
     || payloadId
@@ -685,14 +688,16 @@ function formatModel(payload) {
 const raw = await readStdin();
 const payload = parseJson(raw);
 const mode = process.argv[2] || 'recent';
+const explicitTranscript = normalizeMaybeMsysPath(payload.transcript_path || payload.transcriptPath || '');
+const transcript = resolveTranscript(payload);
 
 if (mode === 'model') {
-  const model = formatModel(payload);
+  const latestModel = explicitTranscript && transcript ? computeMetrics(transcript).latestUsage?.model : '';
+  const model = formatModel(payload, latestModel);
   if (model) process.stdout.write(`${model}\n`);
   process.exit(0);
 }
 
-const transcript = resolveTranscript(payload);
 if (!transcript) process.exit(0);
 
 if (mode === 'enrich') {
