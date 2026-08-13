@@ -651,7 +651,7 @@ function payloadModelId(payload) {
 }
 
 function decodeCcrCompatibilityModel(model) {
-  const match = String(model || '').trim().match(/^claude-ccr-h([0-9a-f]+)(?:\[1m\])?$/i);
+  const match = String(model || '').trim().match(/^(?:anthropic\/)?claude-ccr-h([0-9a-f]+)(?:\[1m\])?$/i);
   if (!match || match[1].length % 2 !== 0) return '';
   const decoded = Buffer.from(match[1], 'hex').toString('utf8');
   return /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)+$/.test(decoded) ? decoded : '';
@@ -665,8 +665,9 @@ function airclaudeModeFromCacheDir() {
 
 function formatModel(payload, transcriptModel = '') {
   const payloadId = payloadModelId(payload);
-  const selectedId = transcriptModel || payloadId;
-  const compatibilityModel = decodeCcrCompatibilityModel(selectedId);
+  const payloadCompatibilityModel = decodeCcrCompatibilityModel(payloadId);
+  const selectedId = payloadCompatibilityModel || transcriptModel || payloadId;
+  const compatibilityModel = payloadCompatibilityModel || decodeCcrCompatibilityModel(selectedId);
   const cachedMode = airclaudeModeFromCacheDir();
   const selectedName = compatibilityModel
     ? compatibilityModel.slice(compatibilityModel.lastIndexOf('/') + 1)

@@ -127,6 +127,13 @@ assertModel(
   'airclaude plain claude-sonnet-5',
 );
 
+assertModel(
+  'CCR compatibility model IDs with an Anthropic prefix render their decoded route model',
+  { model: { id: 'anthropic/claude-ccr-h6169726b69742d70726f76696465722d6f6e65706f7274616c2d6c6f77636f73742d6f6e65706f7274616c2f6770742d352e362d7465727261[1m]' } },
+  { AIRCLAUDE_STATUSLINE_LABEL: '', CLAUDE_STATUSLINE_CACHE_DIR: '/tmp/.claude/cache/airclaude/oneportal-lowcost/auto' },
+  'airclaude auto gpt-5.6-terra',
+);
+
 assertCachedWrapperSurvivesScrubbedHome();
 
 const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'statusline-fast-fixture-'));
@@ -185,6 +192,18 @@ try {
   assertModel(
     'latest main transcript model wins after Claude Code /model changes',
     { transcript_path: modelTranscript, model: { display_name: 'Claude Sonnet 5' } },
+    { AIRCLAUDE_STATUSLINE_LABEL: 'airclaude web claude-sonnet-5', CLAUDE_STATUSLINE_CACHE_DIR: '/tmp/.claude/cache/airclaude/oneportal-lowcost/web' },
+    'airclaude web claude-opus-5',
+  );
+
+  assertModel(
+    'current CCR selector wins while the first response after a model switch is still pending',
+    {
+      transcript_path: transcript,
+      model: {
+        id: 'claude-ccr-h6169726b69742d70726f76696465722d7765622d6c6974656c6c6d2d616e7468726f7069632f636c617564652d6f7075732d35[1m]',
+      },
+    },
     { AIRCLAUDE_STATUSLINE_LABEL: 'airclaude web claude-sonnet-5', CLAUDE_STATUSLINE_CACHE_DIR: '/tmp/.claude/cache/airclaude/oneportal-lowcost/web' },
     'airclaude web claude-opus-5',
   );
