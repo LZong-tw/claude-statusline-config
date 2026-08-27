@@ -90,10 +90,72 @@ render_fast() {
   fi
 }
 
+render_builtin_fallback() {
+  if ! command -v node >/dev/null 2>&1; then
+    return 0
+  fi
+
+  STATUSLINE_PAYLOAD="$payload" node - <<'NODE'
+const data = (() => {
+  try {
+    return JSON.parse(process.env.STATUSLINE_PAYLOAD || '{}');
+  } catch {
+    return {};
+  }
+})();
+
+const finite = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+};
+const format = (value) => {
+  const number = finite(value);
+  if (number === null) return '';
+  if (number >= 1_000_000) return `${(number / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (number >= 1_000) return `${(number / 1_000).toFixed(1).replace(/\.0$/, '')}k`;
+  return String(Math.round(number));
+};
+
+const context = data.context_window && typeof data.context_window === 'object'
+  ? data.context_window
+  : {};
+const usage = context.current_usage && typeof context.current_usage === 'object'
+  ? context.current_usage
+  : {};
+const input = finite(context.total_input_tokens) ?? finite(usage.input_tokens);
+const output = finite(context.total_output_tokens) ?? finite(usage.output_tokens);
+const total = input !== null && output !== null ? input + output : null;
+const parts = [];
+if (input !== null) parts.push(`In: ${format(input)}`);
+if (output !== null) parts.push(`Out: ${format(output)}`);
+if (total !== null) parts.push(`Total: ${format(total)}`);
+
+const cost = finite(data.cost?.total_cost_usd);
+if (cost !== null) parts.push(`Cost: $${cost.toFixed(2)}`);
+
+const windowSize = finite(context.context_window_size);
+let used = null;
+if (Object.keys(usage).length > 0) {
+  used = ['input_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens']
+    .map((key) => finite(usage[key]) ?? 0)
+    .reduce((sum, value) => sum + value, 0);
+} else if (windowSize !== null && finite(context.used_percentage) !== null) {
+  used = windowSize * finite(context.used_percentage) / 100;
+}
+if (windowSize !== null && used !== null) {
+  const percentage = windowSize > 0 ? Math.round(used / windowSize * 100) : 0;
+  parts.push(`Context: ${format(used)}/${format(windowSize)} (${percentage}%)`);
+}
+
+if (parts.length > 0) process.stdout.write(`${parts.join(' | ')}\n`);
+NODE
+}
+
 render_fallback() {
-  local model recent read savings roi creation input
+  local model recent builtin read savings roi creation input
   model="$(render_fast model)"
   recent="$(render_fast recent)"
+  builtin="$(render_builtin_fallback)"
   read="$(render_fast read)"
   savings="$(render_fast savings)"
   roi="$(render_fast roi)"
@@ -103,6 +165,7 @@ render_fallback() {
   {
     [[ -n "$model" ]] && printf '%s\n' "$model"
     [[ -n "$recent" ]] && printf '%s\n' "$recent"
+    [[ -n "$builtin" ]] && printf '%s\n' "$builtin"
     printf '%s\n' "$read $savings $roi $creation $input" | sed 's/[[:space:]]*$//'
   } | sed '/^$/d'
 }

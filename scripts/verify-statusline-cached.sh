@@ -71,6 +71,47 @@ if [[ "$output" != *"ReadCache:"* ]]; then
   exit 1
 fi
 
+fallback_payload="$(node - "$fixture_dir/session.jsonl" <<'NODE'
+const transcript = process.argv[2];
+process.stdout.write(JSON.stringify({
+  transcript_path: transcript,
+  cwd: process.cwd(),
+  workspace: { current_dir: process.cwd() },
+  model: { display_name: 'Claude Sonnet 4.6' },
+  context_window: {
+    context_window_size: 1000000,
+    total_input_tokens: 120000,
+    total_output_tokens: 3456,
+    current_usage: {
+      input_tokens: 100000,
+      output_tokens: 3456,
+      cache_read_input_tokens: 16000,
+      cache_creation_input_tokens: 512,
+    },
+  },
+  cost: { total_cost_usd: 12.34 },
+}));
+NODE
+)"
+
+fallback_output="$(
+  printf '%s' "$fallback_payload" | env \
+    PATH="$fakebin:/usr/bin:/bin" \
+    HOME="$fixture_dir/home" \
+    CCSTATUSLINE_BIN=/bin/false \
+    CLAUDE_STATUSLINE_CACHE_DIR="$cache_dir" \
+    CLAUDE_STATUSLINE_TTL_SECONDS=0 \
+    "$root/statusline-cached.sh"
+)"
+
+for marker in 'In: 120k' 'Out: 3.5k' 'Total: 123.5k' 'Cost: $12.34' 'Context:'; do
+  if [[ "$fallback_output" != *"$marker"* ]]; then
+    echo "statusline-cached fallback should preserve $marker" >&2
+    printf '%s\n' "$fallback_output" >&2
+    exit 1
+  fi
+done
+
 rm -f "$cache_dir"/statusline.*.txt
 captured="$fixture_dir/captured.json"
 fake_ccstatusline="$fixture_dir/fake-ccstatusline.sh"
