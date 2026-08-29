@@ -663,14 +663,39 @@ function airclaudeModeFromCacheDir() {
   return match?.[1] || '';
 }
 
+function isAirclaudeLauncherModel(model) {
+  return /^(?:claude-)?airkit-mode(?:\[1m\])?$/i.test(String(model || '').trim());
+}
+
+function displayRoute(value) {
+  const [provider = '', model = ''] = String(value || '').split(/[\/,]/);
+  if (!provider || !model) return model || provider;
+  const shortProvider = /web-litellm$/i.test(provider)
+    ? 'web_litellm'
+    : /oneportal$/i.test(provider)
+      ? 'oneportal'
+      : provider.replace(/^airkit-provider-[^-]+-/i, '').replace(/-/g, '_');
+  return `${shortProvider}/${model.replace(/\[1m\]$/i, '')}`;
+}
+
+function activeAirclaudeRouteModel() {
+  const value = process.env.AIRCLAUDE_ACTIVE_MODEL
+    || process.env.AIRCLAUDE_ROUTE_DEFAULT
+    || process.env.AIRCLAUDE_ROUTE_DEFAULT_MODEL
+    || '';
+  return displayRoute(value);
+}
+
 function formatModel(payload, transcriptModel = '') {
   const payloadId = payloadModelId(payload);
   const payloadCompatibilityModel = decodeCcrCompatibilityModel(payloadId);
-  const selectedId = payloadCompatibilityModel || transcriptModel || payloadId;
+  const selectedId = payloadCompatibilityModel
+    || (isAirclaudeLauncherModel(payloadId) ? activeAirclaudeRouteModel() : transcriptModel)
+    || payloadId;
   const compatibilityModel = payloadCompatibilityModel || decodeCcrCompatibilityModel(selectedId);
   const cachedMode = airclaudeModeFromCacheDir();
   const selectedName = compatibilityModel
-    ? compatibilityModel.slice(compatibilityModel.lastIndexOf('/') + 1)
+    ? displayRoute(compatibilityModel)
     : String(selectedId).replace(/\[1m\]$/i, '');
   let name = cachedMode && selectedName
     ? `airclaude ${cachedMode} ${selectedName}`
