@@ -4,13 +4,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const CACHE_VERSION = 8;
-const MEM_CACHE_VERSION = 2;
+const CACHE_VERSION = 9;
+const MEM_CACHE_VERSION = 3;
 const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const CACHE_MAX_FILES = 200;
 const READ_CHUNK_BYTES = 1024 * 1024;
 const USER_EVENT_RE = /"type"\s*:\s*"user"/;
 const ASSISTANT_EVENT_RE = /"type"\s*:\s*"assistant"/;
+const MESSAGE_ID_RE = /"message"\s*:\s*\{\s*"id"\s*:\s*"([^"]+)"/;
 const MODEL_RE = /"model"\s*:\s*"([^"]*)"/;
 const CACHE_READ_RE = /"cache_read_input_tokens"\s*:\s*(\d+)/;
 const CACHE_CREATION_RE = /"cache_creation_input_tokens"\s*:\s*(\d+)/;
@@ -241,6 +242,26 @@ function priceForModel(model) {
   return pricingForModel(model).input;
 }
 
+function isGptLikeModel(model) {
+  return typeof model === 'string' && /(?:^|[/:-])gpt-/i.test(model);
+}
+
+function usageCounters(message) {
+  const usage = message?.usage || {};
+  const read = Number(usage.cache_read_input_tokens || 0);
+  const creation = Number(usage.cache_creation_input_tokens || 0);
+  const rawInput = Number(usage.input_tokens || 0);
+  const input = isGptLikeModel(message?.model) && read > 0
+    ? Math.max(0, rawInput - read)
+    : rawInput;
+  return {
+    read,
+    creation,
+    input,
+    output: Number(usage.output_tokens || 0),
+  };
+}
+
 function emptyTotals() {
   return { read: 0, creation: 0, input: 0, baseline: 0, effective: 0, cost: 0, costKnown: true };
 }
@@ -293,6 +314,10 @@ function flushTurn(state) {
 
 function consumeMainTurn(event, state) {
   if (event.type === 'user') {
+    if (event.isToolResult) {
+      if (!state.inTurn) state.inTurn = true;
+      return;
+    }
     if (state.sawAssistant || !state.inTurn) flushTurn(state);
     state.inTurn = true;
     state.sawAssistant = false;
@@ -300,10 +325,7 @@ function consumeMainTurn(event, state) {
   }
 
   if (event.type !== 'assistant' || !state.inTurn) return;
-  const usage = event.message?.usage || {};
-  const read = Number(usage.cache_read_input_tokens || 0);
-  const creation = Number(usage.cache_creation_input_tokens || 0);
-  const input = Number(usage.input_tokens || 0);
+  const { read, creation, input } = usageCounters(event.message);
   state.sawAssistant = true;
   state.turnRead += read;
   state.turnCreation += creation;
@@ -316,11 +338,7 @@ function consumeMainTurn(event, state) {
 
 function consumeAssistantUsage(event, totals) {
   if (event.type !== 'assistant') return;
-  const usage = event.message?.usage || {};
-  const read = Number(usage.cache_read_input_tokens || 0);
-  const creation = Number(usage.cache_creation_input_tokens || 0);
-  const input = Number(usage.input_tokens || 0);
-  const output = Number(usage.output_tokens || 0);
+  const { read, creation, input, output } = usageCounters(event.message);
   const price = priceForModel(event.message?.model);
 
   totals.read += read;
@@ -364,11 +382,17 @@ function eventTypeFromLine(line) {
 
 function eventFromLine(line) {
   const type = eventTypeFromLine(line);
-  if (type === 'user') return { type };
+  if (type === 'user') {
+    return {
+      type,
+      isToolResult: /"type"\s*:\s*"tool_result"/.test(line),
+    };
+  }
   if (type !== 'assistant') return null;
 
   return {
     type,
+    messageId: stringFromLine(line, MESSAGE_ID_RE),
     message: {
       model: stringFromLine(line, MODEL_RE),
       usage: {
@@ -453,9 +477,16 @@ function updateFileState(file, previous, trackTurns) {
   const turnState = trackTurns
     ? incremental ? normalizeTurnState(previous.turnState) : emptyTurnState()
     : null;
+  const seenAssistantIds = new Set(
+    incremental && Array.isArray(previous.seenAssistantIds) ? previous.seenAssistantIds : [],
+  );
   let latestUsage = trackTurns && incremental ? previous.latestUsage ?? null : null;
 
   const consumed = parseFileTail(file, offset, stat.size, (event) => {
+    if (event.type === 'assistant' && event.messageId) {
+      if (seenAssistantIds.has(event.messageId)) return;
+      seenAssistantIds.add(event.messageId);
+    }
     consumeAssistantUsage(event, totals);
     if (trackTurns) consumeMainTurn(event, turnState);
     if (trackTurns && event.type === 'assistant' && !event.isSidechain && !event.isApiErrorMessage) {
@@ -469,6 +500,7 @@ function updateFileState(file, previous, trackTurns) {
     offset: offset + consumed,
     size: stat.size,
     totals,
+    seenAssistantIds: [...seenAssistantIds],
     ...(trackTurns ? { turnState, latestUsage } : {}),
   };
 }
@@ -610,11 +642,12 @@ function enrichPayload(payload, transcript) {
   const contextWindowSize = positiveNumber(
     existingContext.context_window_size ?? process.env.AIRCLAUDE_STATUSLINE_CONTEXT_WINDOW,
   );
+  const currentCounters = usageCounters(metrics.latestUsage);
   const currentUsage = {
-    input_tokens: positiveNumber(usage.input_tokens) ?? 0,
-    output_tokens: positiveNumber(usage.output_tokens) ?? 0,
-    cache_creation_input_tokens: positiveNumber(usage.cache_creation_input_tokens) ?? 0,
-    cache_read_input_tokens: positiveNumber(usage.cache_read_input_tokens) ?? 0,
+    input_tokens: currentCounters.input,
+    output_tokens: currentCounters.output,
+    cache_creation_input_tokens: currentCounters.creation,
+    cache_read_input_tokens: currentCounters.read,
   };
   const currentUsageTotal = Object.values(currentUsage).reduce((sum, value) => sum + value, 0);
   const existingUsage = existingContext.current_usage;
@@ -633,7 +666,8 @@ function enrichPayload(payload, transcript) {
   }
 
   const existingCost = payload.cost && typeof payload.cost === 'object' ? payload.cost : {};
-  if (metrics.mainTotals.costKnown && !Number.isFinite(Number(existingCost.total_cost_usd))) {
+  const hasManagedPricing = ENV_PRICE_MAP.length > 0;
+  if (metrics.mainTotals.costKnown && (hasManagedPricing || !Number.isFinite(Number(existingCost.total_cost_usd)))) {
     next.cost = { ...existingCost, total_cost_usd: metrics.mainTotals.cost };
   }
   return next;

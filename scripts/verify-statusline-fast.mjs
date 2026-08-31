@@ -117,21 +117,21 @@ assertModel(
   'CCR compatibility model IDs render their decoded AirClaude route model',
   { model: { id: 'claude-ccr-h6169726b69742d70726f76696465722d7765622d6c6974656c6c6d2d616e7468726f7069632f636c617564652d6f7075732d35[1m]' } },
   { AIRCLAUDE_STATUSLINE_LABEL: '', CLAUDE_STATUSLINE_CACHE_DIR: '/tmp/.claude/cache/airclaude/oneportal-lowcost/web' },
-  'airclaude web claude-opus-5',
+  'airclaude web litellm_anthropic/claude-opus-5',
 );
 
 assertModel(
   'CCR compatibility model IDs preserve the decoded Sonnet model too',
   { model: { id: 'claude-ccr-h6f6e65706f7274616c2d616e7468726f7069632f636c617564652d736f6e6e65742d35[1m]' } },
   { AIRCLAUDE_STATUSLINE_LABEL: '', CLAUDE_STATUSLINE_CACHE_DIR: '/tmp/.claude/cache/airclaude/oneportal-lowcost/plain' },
-  'airclaude plain claude-sonnet-5',
+  'airclaude plain oneportal_anthropic/claude-sonnet-5',
 );
 
 assertModel(
   'CCR compatibility model IDs with an Anthropic prefix render their decoded route model',
   { model: { id: 'anthropic/claude-ccr-h6169726b69742d70726f76696465722d6f6e65706f7274616c2d6c6f77636f73742d6f6e65706f7274616c2f6770742d352e362d7465727261[1m]' } },
   { AIRCLAUDE_STATUSLINE_LABEL: '', CLAUDE_STATUSLINE_CACHE_DIR: '/tmp/.claude/cache/airclaude/oneportal-lowcost/auto' },
-  'airclaude auto gpt-5.6-terra',
+  'airclaude auto oneportal/gpt-5.6-terra',
 );
 
 assertCachedWrapperSurvivesScrubbedHome();
@@ -140,6 +140,8 @@ const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'statusline-fast-fixtur
 const transcript = path.join(fixtureDir, 'session.jsonl');
 const enrichTranscript = path.join(fixtureDir, 'enrich-session.jsonl');
 const modelTranscript = path.join(fixtureDir, 'model-session.jsonl');
+const duplicateTranscript = path.join(fixtureDir, 'duplicate-session.jsonl');
+const gptTranscript = path.join(fixtureDir, 'gpt-session.jsonl');
 
 try {
   fs.writeFileSync(
@@ -189,12 +191,158 @@ try {
     })}\n`,
   );
 
+  fs.writeFileSync(
+    duplicateTranscript,
+    [
+      JSON.stringify({ type: 'user', message: { role: 'user', content: 'start' } }),
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          id: 'chatcmpl-duplicate-1',
+          model: 'example-cheap-model',
+          usage: { cache_read_input_tokens: 600, cache_creation_input_tokens: 0, input_tokens: 100, output_tokens: 10 },
+        },
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          id: 'chatcmpl-duplicate-1',
+          model: 'example-cheap-model',
+          usage: { cache_read_input_tokens: 600, cache_creation_input_tokens: 0, input_tokens: 100, output_tokens: 10 },
+        },
+      }),
+      JSON.stringify({
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call-1', content: 'ok' }] },
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          id: 'chatcmpl-duplicate-2',
+          model: 'example-cheap-model',
+          usage: { cache_read_input_tokens: 600, cache_creation_input_tokens: 0, input_tokens: 100, output_tokens: 10 },
+        },
+      }),
+      JSON.stringify({ type: 'user', message: { role: 'user', content: 'next' } }),
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          id: 'chatcmpl-miss-1',
+          model: 'example-cheap-model',
+          usage: { cache_read_input_tokens: 0, cache_creation_input_tokens: 0, input_tokens: 100, output_tokens: 10 },
+        },
+      }),
+      '',
+    ].join('\n'),
+  );
+
+  fs.writeFileSync(
+    gptTranscript,
+    [
+      JSON.stringify({ type: 'user', message: { role: 'user', content: 'reuse the stable prefix' } }),
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          id: 'chatcmpl-gpt-cache-1',
+          model: 'gpt-5.6-sol',
+          usage: { input_tokens: 1_000, cache_read_input_tokens: 900, cache_creation_input_tokens: 0, output_tokens: 10 },
+        },
+      }),
+      '',
+    ].join('\n'),
+  );
+
   assertModel(
     'latest main transcript model wins after Claude Code /model changes',
     { transcript_path: modelTranscript, model: { display_name: 'Claude Sonnet 5' } },
     { AIRCLAUDE_STATUSLINE_LABEL: 'airclaude web claude-sonnet-5', CLAUDE_STATUSLINE_CACHE_DIR: '/tmp/.claude/cache/airclaude/oneportal-lowcost/web' },
     'airclaude web claude-opus-5',
   );
+
+  assertMetric(
+    'statusline deduplicates repeated assistant message IDs and keeps tool results in the same turn',
+    'recent',
+    { transcript_path: duplicateTranscript },
+    {},
+    'T8:●○ ■■│□',
+  );
+
+  assertMetric(
+    'statusline totals do not count repeated assistant message IDs twice',
+    'read',
+    { transcript_path: duplicateTranscript },
+    {},
+    'ReadCache:1.2K (80%)',
+  );
+
+  fs.appendFileSync(
+    duplicateTranscript,
+    `${JSON.stringify({
+      type: 'assistant',
+      message: {
+        id: 'chatcmpl-duplicate-2',
+        model: 'example-cheap-model',
+        usage: { cache_read_input_tokens: 600, cache_creation_input_tokens: 0, input_tokens: 100, output_tokens: 10 },
+      },
+    })}\n`,
+  );
+  assertMetric(
+    'statusline incremental refresh keeps previously seen assistant IDs deduplicated',
+    'read',
+    { transcript_path: duplicateTranscript },
+    {},
+    'ReadCache:1.2K (80%)',
+  );
+
+  assertMetric(
+    'statusline treats GPT input_tokens as total prompt tokens when cache read is present',
+    'read',
+    { transcript_path: gptTranscript },
+    {},
+    'ReadCache:900 (90%)',
+  );
+
+  assertMetric(
+    'statusline marks a GPT turn as a cache hit after normalizing total prompt tokens',
+    'recent',
+    { transcript_path: gptTranscript },
+    {},
+    'T8:● ■',
+  );
+
+  const gptCost = render('enrich', {
+    transcript_path: gptTranscript,
+    cost: { total_cost_usd: 99 },
+  }, {
+    AIRCLAUDE_STATUSLINE_PRICE_MAP_JSON: JSON.stringify({
+      'gpt-5.6-sol': { input: 5, inputCacheHit: 0.5, output: 30 },
+    }),
+  });
+  if (gptCost.status !== 0) {
+    fail(`GPT cost enrichment exited with ${gptCost.status}\n${gptCost.stderr}`);
+  } else {
+    const payload = JSON.parse(gptCost.stdout);
+    if (payload.cost?.total_cost_usd !== 0.00125) {
+      fail(`GPT cost enrichment: expected 0.00125, got ${JSON.stringify(payload.cost)}`);
+    }
+  }
+
+  const upstreamCost = render('enrich', {
+    transcript_path: transcript,
+    cost: { total_cost_usd: 12.34 },
+  }, {
+    AIRCLAUDE_STATUSLINE_PRICE_MAP_JSON: JSON.stringify({
+      'Kimi-K3': { input: 3, inputCacheHit: 0.3, output: 15 },
+    }),
+  });
+  if (upstreamCost.status !== 0) {
+    fail(`unknown-model cost enrichment exited with ${upstreamCost.status}\n${upstreamCost.stderr}`);
+  } else {
+    const payload = JSON.parse(upstreamCost.stdout);
+    if (payload.cost?.total_cost_usd !== 12.34) {
+      fail(`unknown-model cost enrichment: expected upstream cost 12.34, got ${JSON.stringify(payload.cost)}`);
+    }
+  }
 
   assertModel(
     'current CCR selector wins while the first response after a model switch is still pending',
@@ -205,7 +353,7 @@ try {
       },
     },
     { AIRCLAUDE_STATUSLINE_LABEL: 'airclaude web claude-sonnet-5', CLAUDE_STATUSLINE_CACHE_DIR: '/tmp/.claude/cache/airclaude/oneportal-lowcost/web' },
-    'airclaude web claude-opus-5',
+    'airclaude web litellm_anthropic/claude-opus-5',
   );
 
   const enriched = render('enrich', { transcript_path: enrichTranscript }, {
